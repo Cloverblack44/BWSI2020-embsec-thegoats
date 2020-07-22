@@ -112,8 +112,6 @@ void load_firmware(void)
 {
   int frame_length = 0;
   int read = 0;
-  char IV[];
-  char salt[];
   uint32_t rcv = 0;
   
   uint32_t data_index = 0;
@@ -137,25 +135,10 @@ void load_firmware(void)
   rcv = uart_read(UART1, BLOCKING, &read);
   size |= (uint32_t)rcv << 8;
   
+
   uart_write_str(UART2, "Received Firmware Size: ");
   uart_write_hex(UART2, size);
   nl(UART2);
-
-  // Get cipherIV.
-  for (i = 0; i < 16; i++) {
-      IV[i] = UART_READ(UART1, BLOCKING, &READ);
-  }
-  uart_write_str(UART2, "Received cipherIV");
-  uart_write_hex(UART2, size);
-  nl(UART2); 
-    
-  // get salt
-  for (i = 0; i < 32; i++) {
-      salt[i] = UART_READ(UART1, BLOCKING, &READ);
-  }
-  uart_write_str(UART2, "Received salt");
-  uart_write_hex(UART2, size);
-  nl(UART2); 
 
 
   // Compare to old version and abort if older (note special case for version 0).
@@ -186,26 +169,17 @@ void load_firmware(void)
     frame_length = (int)rcv << 8;
     rcv = uart_read(UART1, BLOCKING, &read);
     frame_length += (int)rcv;
-    if (frame_length == 0) {
-        break
-    }
+
     // Write length debug message
     uart_write_hex(UART2,(unsigned char)rcv);
     nl(UART2);
 
     // Get the number of bytes specified
-    for (int i = 0; i < 16; ++i){
+    for (int i = 0; i < frame_length; ++i){
         data[data_index] = uart_read(UART1, BLOCKING, &read);
         data_index += 1;
     } //for
-    // HMAC
-      
-    // if tampered return error and reset
-      
-      
-    // Decrypt
 
-      
     // If we filed our page buffer, program it
     if (data_index == FLASH_PAGESIZE || frame_length == 0) {
       // Try to write flash and check for error
