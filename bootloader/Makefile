@@ -63,6 +63,12 @@ BEARSSL=${LIB}/BearSSL
 include ./makedefs
 
 CFLAGS+=-g
+CFLAGS+=-D mySalt=${SALT}
+char key[16] = NAME;
+CFLAGS+=-D mySaltHMAC=${SALT_HMAC}
+char key[16] = NAME;
+CFLAGS+=-D myIV=${CIPHER_IV}
+char key[16] = NAME;
 
 #
 # Where to find header files that do not live in this directory.

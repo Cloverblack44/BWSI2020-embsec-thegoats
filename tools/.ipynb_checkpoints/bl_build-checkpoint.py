@@ -38,11 +38,15 @@ def make_bootloader():
     os.chdir(bootloader)
 
     subprocess.call('make clean', shell=True)
-    status = subprocess.call('make')
+    status = subprocess.call(f'make KEY={to_c_array(Crypto.Random.get_random_bytes(16))}', shell=True)
+    status = subprocess.call(f'make KEY={to_c_array(Crypto.Random.get_random_bytes(16))}', shell=True)
+    status = subprocess.call(f'make KEY={to_c_array(Crypto.Random.get_random_bytes(16))}', shell=True)
 
     # Return True if make returned 0, otherwise return False.
     return (status == 0)
 
+def to_c_array(binary_string):
+	return "{" + ",".join([hex(c) for c in binary_string]) + "}"
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Bootloader Build Tool')
