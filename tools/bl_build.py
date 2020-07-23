@@ -38,9 +38,8 @@ def make_bootloader():
     os.chdir(bootloader)
 
     subprocess.call('make clean', shell=True)
-    status = subprocess.call(f'make SALT={to_c_array(Crypto.Random.get_random_bytes(16))}', shell=True)
+    status = subprocess.call(f'make PASSWORD={to_c_array(Crypto.Random.get_random_bytes(16))}', shell=True)
     status = subprocess.call(f'make SALT_HMAC={to_c_array(Crypto.Random.get_random_bytes(16))}', shell=True)
-    status = subprocess.call(f'make CIPHER_IV={to_c_array(Crypto.Random.get_random_bytes(16))}', shell=True)
 
     # Return True if make returned 0, otherwise return False.
     return (status == 0)
