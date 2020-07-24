@@ -36,6 +36,9 @@ long program_flash(uint32_t, unsigned char*, unsigned int);
 #define UPDATE ((unsigned char)'U')
 #define BOOT ((unsigned char)'B')
 
+//BeaverSSL stuff
+#define KEY_LEN 16  // Length of AES key (16 = AES-128)
+#define IV_LEN 16   // Length of IV (16 is secure)
 
 // Firmware v2 is embedded in bootloader
 extern int _binary_firmware_bin_start;
@@ -122,12 +125,9 @@ void load_firmware(void)
 {
   int frame_length = 0;
   int read = 0;
-<<<<<<< HEAD
-  char HMAC[];
-=======
->>>>>>> 436372af25b45cb1aaabb04a74ed889b02dfdf42
-  char IV[];
-  char salt[];
+  char HMAC[32];
+  char IV[16];
+  char salt[32];
   uint32_t rcv = 0;
   
   uint32_t data_index = 0;
@@ -135,6 +135,11 @@ void load_firmware(void)
   uint32_t version = 0;
   uint32_t size = 0;
 
+  //create variable buffers to hold key
+  unsigned char key[32];
+  unsigned char hmac_key[16];
+  unsigned char aes_key[16];
+    
   // Get version.
   rcv = uart_read(UART1, BLOCKING, &read);
   version = (uint32_t)rcv;
@@ -170,6 +175,18 @@ void load_firmware(void)
   uart_write_str(UART2, "Received salt");
   uart_write_hex(UART2, size);
   nl(UART2); 
+    
+  // Generate keys
+  	test_HKDF_inner(&br_sha512_vtable,
+		mySalt, //master key
+		salt, //salt
+		"",	//leave blank
+		"0000000000000000000000000000000000000000000000000000000000000000",
+	key); //length of key
+    for (int i = 0, i <= 15, i++){
+        aes_key[i] = key[i];
+        hmac_key[i] = key[i + 16];
+    }
 
 
   // Compare to old version and abort if older (note special case for version 0).
@@ -211,30 +228,41 @@ void load_firmware(void)
     for (int i = 0; i < 16; ++i){
         data[data_index] = uart_read(UART1, BLOCKING, &read);
         data_index += 1;
-        
+    data_index = 0; 
     for (int i = 0; i<32, ++){
         HMAC[data_index] = uart_read(UART1, BLOCKING, &read);
         data_index += 1;
     }
     } //for
-    // HMAC
-<<<<<<< HEAD
-    
-    // if tampered return error and reset
-    
-    
-    // Decrypt
-    
-    
-=======
-      
-    // if tampered return error and reset
-      
-      
-    // Decrypt
+    //hex to bin converter
+    static size_t
+
+    //HKDF Key Generation function
 
       
->>>>>>> 436372af25b45cb1aaabb04a74ed889b02dfdf42
+      
+    // HMAC
+      
+	unsigned char output[32];
+	sha_hmac(
+		hmac_key,
+		16, //size of key
+		data,
+		16, //firmware size
+		output);
+    
+    // if tampered return error and reset
+    if(strcmp(HMAC,output) != 0){
+        uart_write(UART2, 3);
+    }
+    
+
+    // Decrypt
+    aes_decrypt(aes_key, IV, data, 16);
+    
+    // Make sure when you decrypt you remove the extra padding on the last line. use frame_length to extract data
+      
+      
     // If we filed our page buffer, program it
     if (data_index == FLASH_PAGESIZE || frame_length == 0) {
       // Try to write flash and check for error
@@ -312,4 +340,93 @@ void boot_firmware(void)
     "LDR R0,=0x10001\n\t"
     "BX R0\n\t"
   );
+}
+
+int
+sha_hmac(char* key, int key_len, char* data, int len, char* out) {
+    br_hmac_key_context kc;
+    br_hmac_context ctx;
+    br_hmac_key_init(&kc, &br_sha256_vtable, key, key_len);
+    br_hmac_init(&ctx, &kc, 0);
+    br_hmac_update(&ctx, data, len);
+    br_hmac_out(&ctx, out);
+
+    return 32;
+}
+
+int
+aes_decrypt(char* key, char* iv, char* ct, int len) {
+    br_block_cbcdec_class* vd = &br_aes_big_cbcdec_vtable;
+    br_aes_gen_cbcdec_keys v_dc;
+    const br_block_cbcdec_class **dc;
+
+    dc = &v_dc.vtable;
+    vd->init(dc, key, KEY_LEN);
+    vd->run(dc, iv, ct, len);
+
+    return 1;
+}
+      static void
+test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
+	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key)
+{
+	unsigned char ikm[100], saltbuf[100], info[100], okm[100], tmp[107], res[107];
+	const unsigned char *salt;
+	size_t ikm_len, salt_len, info_len, okm_len;
+	br_hkdf_context hc;
+	size_t u;
+
+	ikm_len = hextobin(ikm, ikmhex);
+	if (salthex == NULL) {
+		salt = BR_HKDF_NO_SALT;
+		salt_len = 0;
+	} else {
+		salt = saltbuf;
+		salt_len = hextobin(saltbuf, salthex);
+	}
+	info_len = hextobin(info, infohex);
+	okm_len = hextobin(okm, okmhex);
+
+	br_hkdf_init(&hc, dig, salt, salt_len);
+	br_hkdf_inject(&hc, ikm, ikm_len);
+	br_hkdf_flip(&hc);
+	br_hkdf_produce(&hc, info, info_len, key, okm_len);
+	//check_equals("KAT HKDF 1", tmp, okm, okm_len);
+
+	// for(int i = 0; i < okm_len; i ++){
+  //   printf("%02x", key[i]);
+  // }
+// printf("...");
+// fflush(stdout);
+}
+
+hextobin(unsigned char *dst, const char *src)
+{
+	size_t num;
+	unsigned acc;
+	int z;
+
+	num = 0;
+	z = 0;
+	acc = 0;
+	while (*src != 0) {
+		int c = *src ++;
+		if (c >= '0' && c <= '9') {
+			c -= '0';
+		} else if (c >= 'A' && c <= 'F') {
+			c -= ('A' - 10);
+		} else if (c >= 'a' && c <= 'f') {
+			c -= ('a' - 10);
+		} else {
+			continue;
+		}
+		if (z) {
+			*dst ++ = (acc << 4) + c;
+			num ++;
+		} else {
+			acc = c;
+		}
+		z = !z;
+	}
+	return num;
 }

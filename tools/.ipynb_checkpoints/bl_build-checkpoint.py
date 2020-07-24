@@ -40,7 +40,7 @@ def make_bootloader():
     subprocess.call('make clean', shell=True)
     
     #make two keys: one for password for HKDF and one for HMACing the metadata
-    myPass = Crypto.Random.get_random_bytes(16)
+    myPass = Crypto.Random.get_random_bytes(32)
     myMetadataHMAC = Crypto.Random.get_random_bytes(16)
     
     status = subprocess.call(f'make PASSWORD={to_c_array(myPass)}', shell=True)
@@ -48,8 +48,7 @@ def make_bootloader():
     
     #write the keys to the text file
     with open('secret_build_output.txt', 'w') as fp:
-        fp.write(myPass + "\n")
-        fp.write(myMetadataHMAC + "\n")
+        fp.write(myPass + "\n" + myMetadataHMAC + "\n" + "\0")
     
     # Return True if make returned 0, otherwise return False.
     return (status == 0)
