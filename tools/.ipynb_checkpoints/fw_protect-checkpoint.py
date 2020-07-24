@@ -11,7 +11,11 @@ import Crypto.Random
 from Crypto.Cipher import AES
 import random
 from Crypto.Protocol.KDF import HKDF
+<<<<<<< HEAD
 from Crypto.Hash import HMAC, SHA256
+=======
+from Crypto.Hash import SHA512
+>>>>>>> 436372af25b45cb1aaabb04a74ed889b02dfdf42
 from Crypto.Random import get_random_bytes
 
 

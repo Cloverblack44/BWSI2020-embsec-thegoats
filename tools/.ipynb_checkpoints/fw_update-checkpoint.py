@@ -82,6 +82,7 @@ def main(ser, infile, debug):
             idv += 1
             data = fp.readline().rstrip('\n')
             if data == '\0':
+                ser.write(0, 0)
                 break
             # get length of data
             length = int(data[:2])

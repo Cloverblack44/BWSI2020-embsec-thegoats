@@ -84,11 +84,22 @@ int main(void) {
   }
 }
 
-
 /*
  * Load initial firmware into flash
  */
 void load_initial_firmware(void) {
+
+  if (*((uint32_t*)(METADATA_BASE+512)) != 0){
+    /*
+     * Default Flash startup state in QEMU is all zeros since it is
+     * secretly a RAM region for emulation purposes. Only load initial
+     * firmware when metadata page is all zeros. Do this by checking
+     * 4 bytes at the half-way point, since the metadata page is filled
+     * with 0xFF after an erase in this function (program_flash()).
+     */
+    return;
+  }
+
   int size = (int)&_binary_firmware_bin_size;
   int *data = (int *)&_binary_firmware_bin_start;
     
@@ -104,7 +115,6 @@ void load_initial_firmware(void) {
   program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) data) + (i * FLASH_PAGESIZE), size % FLASH_PAGESIZE);
 }
 
-
 /*
  * Load the firmware into flash.
  */
@@ -112,7 +122,10 @@ void load_firmware(void)
 {
   int frame_length = 0;
   int read = 0;
+<<<<<<< HEAD
   char HMAC[];
+=======
+>>>>>>> 436372af25b45cb1aaabb04a74ed889b02dfdf42
   char IV[];
   char salt[];
   uint32_t rcv = 0;
@@ -205,6 +218,7 @@ void load_firmware(void)
     }
     } //for
     // HMAC
+<<<<<<< HEAD
     
     // if tampered return error and reset
     
@@ -212,6 +226,15 @@ void load_firmware(void)
     // Decrypt
     
     
+=======
+      
+    // if tampered return error and reset
+      
+      
+    // Decrypt
+
+      
+>>>>>>> 436372af25b45cb1aaabb04a74ed889b02dfdf42
     // If we filed our page buffer, program it
     if (data_index == FLASH_PAGESIZE || frame_length == 0) {
       // Try to write flash and check for error
