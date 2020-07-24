@@ -48,10 +48,7 @@ def send_metadata(ser, metadata, debug=False):
     # Wait for an OK from the bootloader.
     resp = ser.read()
     if resp == 3:
-    while resp != RESP_OK:
-        ser.write(metadata)
-        resp = ser.read()
-        time.sleep(0.2)
+        raise RuntimeError('Frame did not verify')
     
     if resp != RESP_OK:
         raise RuntimeError("ERROR: Bootloader responded with {}".format(repr(resp)))
@@ -86,7 +83,6 @@ def main(ser, infile, debug):
     with open(infile, 'rb') as fp:
         # write the metadata to teh stellaris
         metadata = fp.readline().strip('\n')
-        firmware = firmware_blob[4:]
 
         send_metadata(ser, metadata, debug=debug)
         while True:
