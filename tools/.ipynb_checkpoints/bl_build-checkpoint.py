@@ -43,8 +43,7 @@ def make_bootloader():
     myPass = Crypto.Random.get_random_bytes(32)
     myMetadataHMAC = Crypto.Random.get_random_bytes(16)
     
-    status = subprocess.call(f'make PASSWORD={to_c_array(myPass)}', shell=True)
-    status = subprocess.call(f'make METADATA_HMAC={to_c_array(myMetadataHMAC)}', shell=True)
+    status = subprocess.call(f'make PASSWORD={to_c_array(myPass)} METADATA_HMAC={to_c_array(myMetadataHMAC)}', shell=True)
     
     #write the keys to the text file
     with open('secret_build_output.txt', 'w') as fp:

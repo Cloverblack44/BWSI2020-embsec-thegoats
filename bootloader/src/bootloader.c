@@ -193,7 +193,7 @@ void load_firmware(void)
   nl(UART2); 
 
     sha_hmac(
-        METADATA_HMAC,
+        metadataKey,
         16, //size of key
         metadata,
         52, //firmware size
@@ -206,7 +206,7 @@ void load_firmware(void)
   } else {
   // Generate keys
     test_HKDF_inner(&br_sha512_vtable,
-        mySalt, //master key
+        passwordKey, //master key
         salt, //salt
         "",	//leave blank
     "0000000000000000000000000000000000000000000000000000000000000000",
