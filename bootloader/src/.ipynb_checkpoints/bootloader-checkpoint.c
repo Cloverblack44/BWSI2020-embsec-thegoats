@@ -125,11 +125,13 @@ void load_firmware(void)
 {
   int frame_length = 0;
   int read = 0;
+  char temporary_data[16];
+  char metadata[52]
   char HMAC[32];
   char IV[16];
   char salt[32];
   uint32_t rcv = 0;
-  
+  unsigned char output[32];
   uint32_t data_index = 0;
   uint32_t page_addr = FW_BASE;
   uint32_t version = 0;
@@ -140,54 +142,83 @@ void load_firmware(void)
   unsigned char hmac_key[16];
   unsigned char aes_key[16];
     
-  // Get version.
-  rcv = uart_read(UART1, BLOCKING, &read);
-  version = (uint32_t)rcv;
-  rcv = uart_read(UART1, BLOCKING, &read);
-  version |= (uint32_t)rcv << 8;
+    while (1) {
+      // Get version.
+      rcv = uart_read(UART1, BLOCKING, &read);
+      metadata[0] = rcv;
+      version = (uint32_t)rcv;
+      rcv = uart_read(UART1, BLOCKING, &read);
+      metadata[1] = rcv;
+      version |= (uint32_t)rcv << 8;
+        
+      uart_write_str(UART2, "Received Firmware Version: ");
+      uart_write_hex(UART2, version);
+      nl(UART2);
 
-  uart_write_str(UART2, "Received Firmware Version: ");
-  uart_write_hex(UART2, version);
-  nl(UART2);
+      // Get size.
+      rcv = uart_read(UART1, BLOCKING, &read);
+      metadata[2] = rcv;
+      size = (uint32_t)rcv;
+      rcv = uart_read(UART1, BLOCKING, &read);
+      metadata[3] = rcv;
+      size |= (uint32_t)rcv << 8;
 
-  // Get size.
-  rcv = uart_read(UART1, BLOCKING, &read);
-  size = (uint32_t)rcv;
-  rcv = uart_read(UART1, BLOCKING, &read);
-  size |= (uint32_t)rcv << 8;
-  
-  uart_write_str(UART2, "Received Firmware Size: ");
-  uart_write_hex(UART2, size);
-  nl(UART2);
+      uart_write_str(UART2, "Received Firmware Size: ");
+      uart_write_hex(UART2, size);
+      nl(UART2);
 
-  // Get cipherIV.
-  for (i = 0; i < 16; i++) {
-      IV[i] = UART_READ(UART1, BLOCKING, &READ);
-  }
-  uart_write_str(UART2, "Received cipherIV");
-  uart_write_hex(UART2, size);
-  nl(UART2); 
-    
-  // get salt
-  for (i = 0; i < 32; i++) {
-      salt[i] = UART_READ(UART1, BLOCKING, &READ);
-  }
-  uart_write_str(UART2, "Received salt");
-  uart_write_hex(UART2, size);
-  nl(UART2); 
-    
-  // Generate keys
-  	test_HKDF_inner(&br_sha512_vtable,
-		mySalt, //master key
-		salt, //salt
-		"",	//leave blank
-		"0000000000000000000000000000000000000000000000000000000000000000",
-	key); //length of key
-    for (int i = 0, i <= 15, i++){
-        aes_key[i] = key[i];
-        hmac_key[i] = key[i + 16];
+      // Get cipherIV.
+      for (i = 0; i < 16; i++) {
+          IV[i] = UART_READ(UART1, BLOCKING, &READ);
+          metadata[4+i] = IV[i];
+      }
+      uart_write_str(UART2, "Received cipherIV");
+      uart_write_hex(UART2, size);
+      nl(UART2); 
+
+      // get salt
+      for (i = 0; i < 32; i++) {
+          salt[i] = UART_READ(UART1, BLOCKING, &READ);
+          metadata[20+i] = salt[i];
+      }
+      uart_write_str(UART2, "Received salt");
+      uart_write_hex(UART2, size);
+      nl(UART2); 
+
+      // get HMAC
+      for (i = 0; i < 32; i++) {
+          HMAC[i] = UART_READ(UART1, BLOCKING, &READ);
+      }
+      uart_write_str(UART2, "Received HMAC");
+      uart_write_hex(UART2, size);
+      nl(UART2); 
+
+        sha_hmac(
+            METADATA_HMAC,
+            16, //size of key
+            metadata,
+            52, //firmware size
+            output);
+
+      // if tampered return error and reset
+      if(strcmp(HMAC,output) != 0){
+          uart_write(UART2, 3);
+          continue;
+      } else {
+      // Generate keys
+        test_HKDF_inner(&br_sha512_vtable,
+            mySalt, //master key
+            salt, //salt
+            "",	//leave blank
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        key); //length of key
+        for (int i = 0, i <= 15, i++){
+            aes_key[i] = key[i];
+            hmac_key[i] = key[i + 16];
+            break;
+            }
+        }
     }
-
 
   // Compare to old version and abort if older (note special case for version 0).
   uint16_t old_version = *fw_version_address;
@@ -226,26 +257,22 @@ void load_firmware(void)
 
     // Get the number of bytes specified
     for (int i = 0; i < 16; ++i){
-        data[data_index] = uart_read(UART1, BLOCKING, &read);
+        temporary_data[i] = uart_read(UART1, BLOCKING, &read);
         data_index += 1;
     data_index = 0; 
     for (int i = 0; i<32, ++){
-        HMAC[data_index] = uart_read(UART1, BLOCKING, &read);
-        data_index += 1;
+        HMAC[i] = uart_read(UART1, BLOCKING, &read);
     }
     } //for
     //hex to bin converter
-    static size_t
 
     //HKDF Key Generation function
 
       
       
-    // HMAC
-      
-	unsigned char output[32];
+    // Verify the frame
 	sha_hmac(
-		hmac_key,
+	hmac_key,
 		16, //size of key
 		data,
 		16, //firmware size
@@ -254,12 +281,16 @@ void load_firmware(void)
     // if tampered return error and reset
     if(strcmp(HMAC,output) != 0){
         uart_write(UART2, 3);
+        continue
     }
     
 
     // Decrypt
     aes_decrypt(aes_key, IV, data, 16);
     
+    for (i = 0; i < frame_length; i++ ){
+        data[frame_length-16 + i] = temporary_data[i]
+    }
     // Make sure when you decrypt you remove the extra padding on the last line. use frame_length to extract data
       
       
@@ -399,7 +430,7 @@ test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 // printf("...");
 // fflush(stdout);
 }
-
+static size_t
 hextobin(unsigned char *dst, const char *src)
 {
 	size_t num;

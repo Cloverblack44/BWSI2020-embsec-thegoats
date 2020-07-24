@@ -47,6 +47,12 @@ def send_metadata(ser, metadata, debug=False):
 
     # Wait for an OK from the bootloader.
     resp = ser.read()
+    if resp == 3:
+    while resp != RESP_OK:
+        ser.write(metadata)
+        resp = ser.read()
+        time.sleep(0.2)
+    
     if resp != RESP_OK:
         raise RuntimeError("ERROR: Bootloader responded with {}".format(repr(resp)))
 
@@ -58,9 +64,15 @@ def send_frame(ser, frame, debug=False):
         print(frame)
 
     resp = ser.read()  # Wait for an OK from the bootloader
-
+    
     time.sleep(0.1)
-
+    
+    if resp == 3:
+        while resp != RESP_OK:
+            ser.write(frame)
+            resp = ser.read()
+            time.sleep(0.2)
+    
     if resp != RESP_OK:
         raise RuntimeError("ERROR: Bootloader responded with {}".format(repr(resp)))
 

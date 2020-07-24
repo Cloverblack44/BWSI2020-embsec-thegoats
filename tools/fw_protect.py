@@ -31,15 +31,20 @@ def protect_firmware(infile, outfile, version, message):
         firmware = fp.read()
         length = len(firmware)
     # generate keys
-    salt = get_random_bytes(32)
+    passwords = open("secret_build_output.txt", 'rb')
+    salt = passwords.readline().strip('\n')
+    HMACkey = password.readline().strip('\n')
     AESkey, HMACkey = generate_keys_hkdf(salt)
     
     # generate cipher
     cipher = AES.new(AESkey, AES.MODE_CBC)
+    MACkey = HMAC.new(HMACkey, digestmod=SHA256)
+    MACkey.update(struct.pack('<HH16x32x32s', version, length, cipher.iv, salt)
+    bigMAC = MACkey.digest()
     # metadata
-    # [ version #] | [firmware size] | [ cipher iv] | [salt]
-    # [0x02]       | [0x02]          | [0x10]       | [0x20] in bytes
-    metadata = struct.pack('<HH16x32x', version, length, cipher.iv, salt)
+    # [ version #] | [firmware size] | [ cipher iv] | [salt] | [HMAC]
+    # [0x02]       | [0x02]          | [0x10]       | [0x20] | [0x20] in bytes
+    metadata = struct.pack('<HH16x32x32s', version, length, cipher.iv, salt, bigMAC)
     with open(outfile, 'wb+') as out
         outfile.write(metadata + '\n')
     # writes to the file 16 bytes at a time
