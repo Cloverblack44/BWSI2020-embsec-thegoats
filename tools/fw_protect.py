@@ -11,7 +11,7 @@ import Crypto.Random
 from Crypto.Cipher import AES
 import random
 from Crypto.Protocol.KDF import HKDF
-from Crypto.Hash import SHA512
+from Crypto.Hash import HMAC, SHA256
 from Crypto.Random import get_random_bytes
 
 
@@ -29,14 +29,14 @@ def protect_firmware(infile, outfile, version, message):
     # Load firmware binary from infile
     with open(infile, 'rb') as fp:
         firmware = fp.read()
+        length = len(firmware)
     # generate keys
     salt = get_random_bytes(32)
     AESkey, HMACkey = generate_keys_hkdf(salt)
     
     # generate cipher
     cipher = AES.new(AESkey, AES.MODE_CBC)
-    # send metadata
-    length = len(firmware)
+    # metadata
     # [ version #] | [firmware size] | [ cipher iv] | [salt]
     # [0x02]       | [0x02]          | [0x10]       | [0x20] in bytes
     metadata = struct.pack('<HH16x32x', version, length, cipher.iv, salt)
@@ -45,14 +45,14 @@ def protect_firmware(infile, outfile, version, message):
     # writes to the file 16 bytes at a time
     firmware_blob = open(outfile, 'ab')
     while length > 16:
-        with open(infile, 'rb') as fp:
-            firmware = cipher.encrypt(pad(fp.read(16), 16))
-            # I have to reset the HMAC each time unfort
-            MACkey = HMAC.new(HMACkey, digestmod=SHA256)
-            MACkey.update(firmware)
-            bigMAC = MACkey.digest()
-            length -= 16
-            firmware_blob.write('16' + firmware+'\n')
+        fp = open(infile, 'rb')
+        firmware = cipher.encrypt(pad(fp.read(16), 16))
+        # I have to reset the HMAC each time unfort
+        MACkey = HMAC.new(HMACkey, digestmod=SHA256)
+        MACkey.update(firmware)
+        bigMAC = MACkey.digest()
+        length -= 16
+        firmware_blob.write('16' + firmware + bigMAC + '\n')
 
     firmware = cipher.encrypt(pad(fp.read(length), 16))
     MACkey = HMAC.new(HMACkey, digestmod=SHA256)

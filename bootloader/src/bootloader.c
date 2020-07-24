@@ -112,6 +112,7 @@ void load_firmware(void)
 {
   int frame_length = 0;
   int read = 0;
+  char HMAC[];
   char IV[];
   char salt[];
   uint32_t rcv = 0;
@@ -197,14 +198,21 @@ void load_firmware(void)
     for (int i = 0; i < 16; ++i){
         data[data_index] = uart_read(UART1, BLOCKING, &read);
         data_index += 1;
+        
+    for (int i = 0; i<32, ++){
+        HMAC[data_index] = uart_read(UART1, BLOCKING, &read);
+        data_index += 1;
+    }
     } //for
     // HMAC
-      
+    
     // if tampered return error and reset
-      
-      
+    
+    
     // Decrypt
-
+    
+    // Make sure when you decrypt you remove the extra padding on the last line. use frame_length to extract data
+      
       
     // If we filed our page buffer, program it
     if (data_index == FLASH_PAGESIZE || frame_length == 0) {

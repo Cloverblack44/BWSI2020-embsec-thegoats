@@ -80,14 +80,14 @@ def main(ser, infile, debug):
         while True:
             # write 16 byte frames to the stellaris
             idv += 1
-            data = fp.readline().rstrip('\n')
+            data = fp.readline().strip('\n')
             if data == '\0':
                 ser.write(0, 0)
                 break
             # get length of data
             length = int(data[:2])
-            frame_fmt = '>H{}s'.format(length)
-
+            frame_fmt = '>H48s'
+            data = data[2:]
             # Construct frame.
             frame = struct.pack(frame_fmt, length, data)
 
