@@ -11,7 +11,7 @@ import Crypto.Random
 from Crypto.Cipher import AES
 import random
 from Crypto.Protocol.KDF import HKDF
-from Crypto.Hash import HMAC, SHA256
+from Crypto.Hash import HMAC, SHA256, SHA512
 from Crypto.Random import get_random_bytes
 
 
@@ -31,24 +31,28 @@ def protect_firmware(infile, outfile, version, message):
         firmware = fp.read()
         length = len(firmware)
     # generate keys
-    passwords = open("secret_build_output.txt", 'rb')
-    salt = passwords.readline().strip('\n')
-    HMACkey = password.readline().strip('\n')
-    MACkey = HMAC.new(HMACkey, digestmod=SHA256)
-    MACkey.update(struct.pack('<HH16x32x', version, length, cipher.iv, salt))
-    bigMAC = MACkey.digest()
+    passwords = open("/home/jovyan/design-challenge-t-h-g-o-a-t-s/bootloader/secret_build_output.txt", 'rb')
+    salt = passwords.read(32)
+    passwords.read(1)
+    HMACkey1 = passwords.read(16)
+    print(HMACkey1)
+    print(len(HMACkey1))
+    passwords.read(1)
     AESkey, HMACkey = generate_keys_hkdf(salt)
     
     # generate cipher
     cipher = AES.new(AESkey, AES.MODE_CBC)
-
+    
+    MACkey = HMAC.new(HMACkey1, digestmod=SHA256)
+    MACkey.update(struct.pack('<HH16s32s', version, length, cipher.iv, salt))
+    bigMAC = MACkey.digest()
     # metadata
     # [ version #] | [firmware size] | [ cipher iv] | [salt] | [HMAC]
     # [0x02]       | [0x02]          | [0x10]       | [0x20] | [0x20] in bytes
-    metadata = struct.pack('<HH16x32x32s', version, length, cipher.iv, salt, bigMAC)
+    metadata = struct.pack('<HH16s32s32s', version, length, cipher.iv, salt, bigMAC)
     
-    with open(outfile, 'wb+') as out
-        outfile.write(metadata + '\n')
+    with open(outfile, 'wb+') as out:
+        out.write(metadata + b'\n')
     # writes to the file 16 bytes at a time
     firmware_blob = open(outfile, 'ab')
     while length > 16:
@@ -59,15 +63,15 @@ def protect_firmware(infile, outfile, version, message):
         MACkey.update(firmware)
         bigMAC = MACkey.digest()
         length -= 16
-        firmware_blob.write('16' + firmware + bigMAC + '\n')
+        firmware_blob.write(b'16' + firmware + bigMAC + b'\n')
 
     firmware = cipher.encrypt(pad(fp.read(length), 16))
     MACkey = HMAC.new(HMACkey, digestmod=SHA256)
     MACkey.update(firmware)
     bigMAC = MACkey.digest()
-    firmware_blob.write(f'{length}'+ firmware+'\n')
+    firmware_blob.write(bytes(length) + firmware+b'\n')
     # null terminator
-    firmware_blob.write("\0\n")
+    firmware_blob.write(b"\0\n")
     
     
 # ---------------------------trash code -------------------------------

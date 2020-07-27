@@ -11,15 +11,25 @@
 
 // Application Imports
 #include "uart.h"
-
+#include "bearssl.h"
 
 // Forward Declarations
 void load_initial_firmware(void);
 void load_firmware(void);
 void boot_firmware(void);
 long program_flash(uint32_t, unsigned char*, unsigned int);
+static void
+test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
+	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key);
 
+int
+aes_decrypt(char* key, char* iv, char* ct, int len);
 
+int
+sha_hmac(char* key, int key_len, char* data, int len, char* out);
+
+static size_t
+hextobin(unsigned char *dst, const char *src);
 // Firmware Constants
 #define METADATA_BASE 0xFC00  // base address of version and firmware size in Flash
 #define FW_BASE 0x10000  // base address of firmware in Flash
@@ -126,7 +136,7 @@ void load_firmware(void)
   int frame_length = 0;
   int read = 0;
   char temporary_data[16];
-  char metadata[52]
+  char comboMetadata[52];
   char HMAC[32];
   char IV[16];
   char salt[32];
@@ -136,7 +146,8 @@ void load_firmware(void)
   uint32_t page_addr = FW_BASE;
   uint32_t version = 0;
   uint32_t size = 0;
-
+  char passwordKey[32] = mySalt;
+  char metadataKey[16] = myMETADATA_HMAC;
   //create variable buffers to hold key
   unsigned char key[32];
   unsigned char hmac_key[16];
@@ -144,10 +155,10 @@ void load_firmware(void)
     
   // Get version.
   rcv = uart_read(UART1, BLOCKING, &read);
-  metadata[0] = rcv;
+  comboMetadata[0] = rcv;
   version = (uint32_t)rcv;
   rcv = uart_read(UART1, BLOCKING, &read);
-  metadata[1] = rcv;
+  comboMetadata[1] = rcv;
   version |= (uint32_t)rcv << 8;
 
   uart_write_str(UART2, "Received Firmware Version: ");
@@ -156,10 +167,10 @@ void load_firmware(void)
 
   // Get size.
   rcv = uart_read(UART1, BLOCKING, &read);
-  metadata[2] = rcv;
+  comboMetadata[2] = rcv;
   size = (uint32_t)rcv;
   rcv = uart_read(UART1, BLOCKING, &read);
-  metadata[3] = rcv;
+  comboMetadata[3] = rcv;
   size |= (uint32_t)rcv << 8;
 
   uart_write_str(UART2, "Received Firmware Size: ");
@@ -167,26 +178,26 @@ void load_firmware(void)
   nl(UART2);
 
   // Get cipherIV.
-  for (i = 0; i < 16; i++) {
-      IV[i] = UART_READ(UART1, BLOCKING, &READ);
-      metadata[4+i] = IV[i];
+  for (int i = 0; i < 16; i++) {
+      IV[i] = uart_read(UART1, BLOCKING, &read);
+      comboMetadata[4+i] = IV[i];
   }
   uart_write_str(UART2, "Received cipherIV");
   uart_write_hex(UART2, size);
   nl(UART2); 
 
   // get salt
-  for (i = 0; i < 32; i++) {
-      salt[i] = UART_READ(UART1, BLOCKING, &READ);
-      metadata[20+i] = salt[i];
+  for (int i = 0; i < 32; i++) {
+      salt[i] = uart_read(UART1, BLOCKING, &read);
+      comboMetadata[20+i] = salt[i];
   }
   uart_write_str(UART2, "Received salt");
   uart_write_hex(UART2, size);
   nl(UART2); 
 
   // get HMAC
-  for (i = 0; i < 32; i++) {
-      HMAC[i] = UART_READ(UART1, BLOCKING, &READ);
+  for (int i = 0; i < 32; i++) {
+      HMAC[i] = uart_read(UART1, BLOCKING, &read);
   }
   uart_write_str(UART2, "Received HMAC");
   uart_write_hex(UART2, size);
@@ -195,14 +206,15 @@ void load_firmware(void)
     sha_hmac(
         metadataKey,
         16, //size of key
-        metadata,
+        comboMetadata,
         52, //firmware size
         output);
 
   // if tampered return error and reset
   if(memcmp(HMAC,output, 32) != 0){
-      uart_write(UART2, 3);
-      return 1;
+      uart_write_str(UART2, "OOP");
+      uart_write(UART1, 3);
+      return;
   } else {
   // Generate keys
     test_HKDF_inner(&br_sha512_vtable,
@@ -211,13 +223,13 @@ void load_firmware(void)
         "",	//leave blank
     "0000000000000000000000000000000000000000000000000000000000000000",
     key); //length of key
-    for (int i = 0, i <= 15, i++){
+  }
+    for (int i = 0; i <= 15; i++){
         aes_key[i] = key[i];
         hmac_key[i] = key[i + 16];
-        break;
         }
-    }
-
+      
+  uart_write_str(UART2, "Received Metadata");
   // Compare to old version and abort if older (note special case for version 0).
   uint16_t old_version = *fw_version_address;
 
@@ -246,8 +258,10 @@ void load_firmware(void)
     frame_length = (int)rcv << 8;
     rcv = uart_read(UART1, BLOCKING, &read);
     frame_length += (int)rcv;
+    uart_write_str(UART2, "got frame_length\n");
+    uart_write(UART2, frame_length);
     if (frame_length == 0) {
-        break
+        break;
     }
     // Write length debug message
     uart_write_hex(UART2,(unsigned char)rcv);
@@ -258,33 +272,39 @@ void load_firmware(void)
         temporary_data[i] = uart_read(UART1, BLOCKING, &read);
         data_index += 1;
     }
-    for (int i = 0; i<32, i++){
+    uart_write_str(UART2, "got data\n");
+    for (int i = 0; i<32; i++){
         HMAC[i] = uart_read(UART1, BLOCKING, &read);
-    } //for
+    } 
+    uart_write_str(UART2, "got HMAC\n");
+      //for
 
     // Verify the frame
 	sha_hmac(
 	hmac_key,
 		16, //size of key
-		data,
+		temporary_data,
 		16, //firmware size
 		output);
-    
+    uart_write_str(UART2, "verifying \n");
+    uart_write_str(UART2, output + '\n');
+    uart_write_str(UART2, HMAC + '\n');
     // if tampered return error and reset
     if(memcmp(HMAC,output, 32) != 0){
-        uart_write(UART2, 3);
-        continue
+        uart_write_str(UART2, "failed verification\n");
+        uart_write(UART1, 3);
+        continue;
     }
     
 
     // Decrypt
+    uart_write_str(UART2, "trying to decrypt \n");
     aes_decrypt(aes_key, IV, temporary_data, 16);
     // fix this
-    for (i = 0; i < frame_length; i++ ){
-        data[data_index - 16 + i] = temporary_data[i]
+    for (int i = 0; i < frame_length; i++ ){
+        data[data_index - 16 + i] = temporary_data[i];
     }
-    // Make sure when you decrypt you remove the extra padding on the last line. use frame_length to extract data
-      
+    uart_write_str(UART2, "decrypted \n");      
       
     // If we filed our page buffer, program it
     if (data_index == FLASH_PAGESIZE || frame_length == 0) {
@@ -389,7 +409,8 @@ aes_decrypt(char* key, char* iv, char* ct, int len) {
 
     return 1;
 }
-      static void
+
+static void
 test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key)
 {

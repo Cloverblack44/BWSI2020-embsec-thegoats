@@ -64,9 +64,8 @@ include ./makedefs
 
 CFLAGS+=-g
 CFLAGS+=-D mySalt=${PASSWORD}
-char passwordKey[16] = mySalt;
 CFLAGS+=-D myMETADATA_HMAC=${METADATA_HMAC}
-char metadataKey[16] = myMETADATA_HMAC;
+
 
 #
 # Where to find header files that do not live in this directory.

@@ -29,7 +29,7 @@ FRAME_SIZE = 16
 
 
 def send_metadata(ser, metadata, debug=False):
-    version, size, iv , salt= struct.unpack_from('<HH16x32s', metadata)
+    version, size, iv , salt, MAC= struct.unpack_from('<HH16s32s32s', metadata)
     print(f'Version: {version}\nSize: {size} bytes\n')
 
     # Handshake for update
@@ -47,25 +47,28 @@ def send_metadata(ser, metadata, debug=False):
 
     # Wait for an OK from the bootloader.
     resp = ser.read()
+    print(resp)
     if resp == 3:
         raise RuntimeError('Frame did not verify')
     
     if resp != RESP_OK:
         raise RuntimeError("ERROR: Bootloader responded with {}".format(repr(resp)))
-
+    ser.read()
 
 def send_frame(ser, frame, debug=False):
+    print("sending frame")
     ser.write(frame)  # Write the frame...
 
     if debug:
         print(frame)
 
     resp = ser.read()  # Wait for an OK from the bootloader
-    
+    print(resp)
     time.sleep(0.1)
     
     if resp == 3:
         while resp != RESP_OK:
+            print("in while loop")
             ser.write(frame)
             resp = ser.read()
             time.sleep(0.2)
@@ -82,13 +85,15 @@ def main(ser, infile, debug):
     idv = 0
     with open(infile, 'rb') as fp:
         # write the metadata to teh stellaris
-        metadata = fp.readline().strip('\n')
+        metadata = fp.read(84)
+        fp.read(1)
 
         send_metadata(ser, metadata, debug=debug)
         while True:
             # write 16 byte frames to the stellaris
             idv += 1
-            data = fp.readline().strip('\n')
+            data = fp.read(16)
+            fp.read(1)
             if data == '\0':
                 ser.write(0, 0)
                 break

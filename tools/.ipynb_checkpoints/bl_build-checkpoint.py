@@ -10,7 +10,7 @@ import os
 import pathlib
 import shutil
 import subprocess
-
+from Crypto.Random import get_random_bytes
 FILE_DIR = pathlib.Path(__file__).parent.absolute()
 
 
@@ -40,15 +40,16 @@ def make_bootloader():
     subprocess.call('make clean', shell=True)
     
     #make two keys: one for password for HKDF and one for HMACing the metadata
-    myPass = Crypto.Random.get_random_bytes(32)
-    myMetadataHMAC = Crypto.Random.get_random_bytes(16)
+    myPass = get_random_bytes(32)
+    myMetadataHMAC = get_random_bytes(16)
     
     status = subprocess.call(f'make PASSWORD={to_c_array(myPass)} METADATA_HMAC={to_c_array(myMetadataHMAC)}', shell=True)
     
     #write the keys to the text file
-    with open('secret_build_output.txt', 'w') as fp:
-        fp.write(myPass + "\n" + myMetadataHMAC + "\n" + "\0")
-    
+    with open('secret_build_output.txt', 'wb') as fp:
+        fp.write(myPass + b"\n" + myMetadataHMAC + b"\n" + b"\0")
+        
+    #myPass + b"\n" + myMetadataHMAC + b"\n" + b"\0"
     # Return True if make returned 0, otherwise return False.
     return (status == 0)
 
