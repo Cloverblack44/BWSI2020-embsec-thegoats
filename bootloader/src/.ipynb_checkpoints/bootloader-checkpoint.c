@@ -8,11 +8,11 @@
 #include "driverlib/flash.h" // FLASH API
 #include "driverlib/sysctl.h" // System control API (clock/reset)
 #include "driverlib/interrupt.h" // Interrupt API
-
+ 
 // Application Imports
 #include "uart.h"
 #include "bearssl.h"
-
+ 
 // Forward Declarations
 void load_initial_firmware(void);
 void load_firmware(void);
@@ -21,51 +21,51 @@ long program_flash(uint32_t, unsigned char*, unsigned int);
 static void
 test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key);
-
+ 
 int
 aes_decrypt(char* key, char* iv, char* ct, int len);
-
+ 
 int
 sha_hmac(char* key, int key_len, char* data, int len, char* out);
-
+ 
 static size_t
 hextobin(unsigned char *dst, const char *src);
 // Firmware Constants
 #define METADATA_BASE 0xFC00  // base address of version and firmware size in Flash
 #define FW_BASE 0x10000  // base address of firmware in Flash
-
-
+ 
+ 
 // FLASH Constants
 #define FLASH_PAGESIZE 1024
 #define FLASH_WRITESIZE 4
-
-
+ 
+ 
 // Protocol Constants
 #define OK    ((unsigned char)0x00)
 #define ERROR ((unsigned char)0x01)
 #define UPDATE ((unsigned char)'U')
 #define BOOT ((unsigned char)'B')
-
+ 
 //BeaverSSL stuff
 #define KEY_LEN 16  // Length of AES key (16 = AES-128)
 #define IV_LEN 16   // Length of IV (16 is secure)
-
+ 
 // Firmware v2 is embedded in bootloader
 extern int _binary_firmware_bin_start;
 extern int _binary_firmware_bin_size;
-
-
+ 
+ 
 // Device metadata
 uint16_t *fw_version_address = (uint16_t *) METADATA_BASE;
 uint16_t *fw_size_address = (uint16_t *) (METADATA_BASE + 2);
 uint8_t *fw_release_message_address;
-
+ 
 // Firmware Buffer
 unsigned char data[FLASH_PAGESIZE];
-
-
+ 
+ 
 int main(void) {
-
+ 
   // Initialize UART channels
   // 0: Reset
   // 1: Host Connection
@@ -73,17 +73,17 @@ int main(void) {
   uart_init(UART0);
   uart_init(UART1);
   uart_init(UART2);
-
+ 
   // Enable UART0 interrupt
   IntEnable(INT_UART0);
   IntMasterEnable();
-
+ 
   load_initial_firmware();
-
+ 
   uart_write_str(UART2, "Welcome to the BWSI Vehicle Update Service!\n");
   uart_write_str(UART2, "Send \"U\" to update, and \"B\" to run the firmware.\n");
   uart_write_str(UART2, "Writing 0x20 to UART0 will reset the device.\n");
-
+ 
   int resp;
   while (1){
     uint32_t instruction = uart_read(UART1, BLOCKING, &resp);
@@ -96,12 +96,12 @@ int main(void) {
     }
   }
 }
-
+ 
 /*
  * Load initial firmware into flash
  */
 void load_initial_firmware(void) {
-
+ 
   if (*((uint32_t*)(METADATA_BASE+512)) != 0){
     /*
      * Default Flash startup state in QEMU is all zeros since it is
@@ -112,22 +112,22 @@ void load_initial_firmware(void) {
      */
     return;
   }
-
+ 
   int size = (int)&_binary_firmware_bin_size;
   int *data = (int *)&_binary_firmware_bin_start;
-    
+ 
   uint16_t version = 2;
   uint32_t metadata = (((uint16_t) size & 0xFFFF) << 16) | (version & 0xFFFF);
   program_flash(METADATA_BASE, (uint8_t*)(&metadata), 4);
   fw_release_message_address = (uint8_t *) "This is the initial release message.";
-    
+ 
   int i = 0;
   for (; i < size / FLASH_PAGESIZE; i++){
        program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) data) + (i * FLASH_PAGESIZE), FLASH_PAGESIZE);
   }
   program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) data) + (i * FLASH_PAGESIZE), size % FLASH_PAGESIZE);
 }
-
+ 
 /*
  * Load the firmware into flash.
  */
@@ -153,7 +153,7 @@ void load_firmware(void)
   unsigned char key[32];
   unsigned char hmac_key[16];
   unsigned char aes_key[16];
-    
+ 
   // Get version.
   rcv = uart_read(UART1, BLOCKING, &read);
   comboMetadata[0] = rcv;
@@ -161,11 +161,11 @@ void load_firmware(void)
   rcv = uart_read(UART1, BLOCKING, &read);
   comboMetadata[1] = rcv;
   version |= (uint32_t)rcv << 8;
-
+ 
   uart_write_str(UART2, "Received Firmware Version: ");
   uart_write_hex(UART2, version);
   nl(UART2);
-
+ 
   // Get size.
   rcv = uart_read(UART1, BLOCKING, &read);
   comboMetadata[2] = rcv;
@@ -173,11 +173,11 @@ void load_firmware(void)
   rcv = uart_read(UART1, BLOCKING, &read);
   comboMetadata[3] = rcv;
   size |= (uint32_t)rcv << 8;
-
+ 
   uart_write_str(UART2, "Received Firmware Size: ");
   uart_write_hex(UART2, size);
   nl(UART2);
-
+ 
   // Get cipherIV.
   for (int i = 0; i < 16; i++) {
       IV[i] = uart_read(UART1, BLOCKING, &read);
@@ -186,7 +186,7 @@ void load_firmware(void)
   uart_write_str(UART2, "Received cipherIV");
   uart_write_hex(UART2, size);
   nl(UART2); 
-
+ 
   // get salt
   for (int i = 0; i < 32; i++) {
       salt[i] = uart_read(UART1, BLOCKING, &read);
@@ -195,7 +195,7 @@ void load_firmware(void)
   uart_write_str(UART2, "Received salt");
   uart_write_hex(UART2, size);
   nl(UART2); 
-    
+ 
   // get HMAC
   for (int i = 0; i < 32; i++) {
       HMAC[i] = uart_read(UART1, BLOCKING, &read);
@@ -203,14 +203,14 @@ void load_firmware(void)
   uart_write_str(UART2, "Received HMAC");
   uart_write_hex(UART2, size);
   nl(UART2); 
-
+ 
     sha_hmac(
         metadataKey,
         16, //size of key
         comboMetadata,
         52, //firmware size
         output);
-
+ 
   // if tampered return error and reset
   if(memcmp(HMAC,output, 32) != 0){
       uart_write_str(UART2, "OOP");
@@ -229,12 +229,12 @@ void load_firmware(void)
         aes_key[i] = key[i];
         hmac_key[i] = key[i + 16];
         }    
-    
-    
+ 
+ 
   uart_write_str(UART2, "Received Metadata");
   // Compare to old version and abort if older (note special case for version 0).
   uint16_t old_version = *fw_version_address;
-
+ 
   if (version != 0 && version < old_version) {
     uart_write(UART1, ERROR); // Reject the metadata.
     SysCtlReset(); // Reset device
@@ -243,18 +243,18 @@ void load_firmware(void)
     // If debug firmware, don't change version
     version = old_version;
   }
-
+ 
   // Write new firmware size and version to Flash
   // Create 32 bit word for flash programming, version is at lower address, size is at higher address
   uint32_t metadata = ((size & 0xFFFF) << 16) | (version & 0xFFFF);
   program_flash(METADATA_BASE, (uint8_t*)(&metadata), 4);
   fw_release_message_address = (uint8_t *) (FW_BASE + size);
-
+ 
   uart_write(UART1, OK); // Acknowledge the metadata.
-
+ 
   /* Loop here until you can get all your characters and stuff */
   while (1) {
-
+ 
     // Get two bytes for the length.
     rcv = uart_read(UART1, BLOCKING, &read);
     frame_length = (int)rcv << 8;
@@ -268,7 +268,7 @@ void load_firmware(void)
     // Write length debug message
     uart_write_hex(UART2,(unsigned char)rcv);
     nl(UART2);
-
+ 
     // Get the number of bytes specified
     for (int i = 0; i < 16; i++){
         temporary_data[i] = uart_read(UART1, BLOCKING, &read);
@@ -288,7 +288,7 @@ void load_firmware(void)
 		16, //firmware size
 		output);
     uart_write_str(UART2, "verifying \n");
-
+ 
     // if tampered return error and reset
     if(memcmp(HMAC,output, 32) != 0){
         uart_write_str(UART2, "failed verification\n");
@@ -296,7 +296,7 @@ void load_firmware(void)
         continue;
     }
     uart_write_str(UART2, "verified \n");
-
+ 
     // Decrypt
     uart_write_str(UART2, "trying to decrypt \n");
     aes_decrypt(aes_key, IV, temporary_data, 16);
@@ -305,7 +305,7 @@ void load_firmware(void)
         data[data_index - 16 + i] = temporary_data[i];
     }
     uart_write_str(UART2, "decrypted \n");      
-      
+ 
     // If we filed our page buffer, program it
     if (data_index == FLASH_PAGESIZE || frame_length == 0) {
       // Try to write flash and check for error
@@ -322,23 +322,23 @@ void load_firmware(void)
       uart_write_hex(UART2, data_index);
       nl(UART2);
 #endif
-
+ 
       // Update to next page
       page_addr += FLASH_PAGESIZE;
       data_index = 0;
-
+ 
       // If at end of firmware, go to main
       if (frame_length == 0) {
-        uart_write(UART1, OK);
+        uart_write(UART1, '\x00');
         break;
       }
     } // if
-
+ 
     uart_write(UART1, OK); // Acknowledge the frame.
   } // while(1)
 }
-
-
+ 
+ 
 /*
  * Program a stream of bytes to the flash.
  * This function takes the starting address of a 1KB page, a pointer to the
@@ -350,10 +350,10 @@ void load_firmware(void)
 long program_flash(uint32_t page_addr, unsigned char *data, unsigned int data_len)
 {
   unsigned int padded_data_len;
-
+ 
   // Erase next FLASH page
   FlashErase(page_addr);
-
+ 
   // Clear potentially unused bytes in last word
   if (data_len % FLASH_WRITESIZE){
     // Get number unused
@@ -368,23 +368,23 @@ long program_flash(uint32_t page_addr, unsigned char *data, unsigned int data_le
   } else {
     padded_data_len = data_len;
   }
-
+ 
   // Write full buffer of 4-byte words
   return FlashProgram((unsigned long *)data, page_addr, padded_data_len);
 }
-
-
+ 
+ 
 void boot_firmware(void)
 {
   uart_write_str(UART2, (char *) fw_release_message_address);
-
+ 
   // Boot the firmware
     __asm(
     "LDR R0,=0x10001\n\t"
     "BX R0\n\t"
   );
 }
-
+ 
 int
 sha_hmac(char* key, int key_len, char* data, int len, char* out) {
     br_hmac_key_context kc;
@@ -393,23 +393,23 @@ sha_hmac(char* key, int key_len, char* data, int len, char* out) {
     br_hmac_init(&ctx, &kc, 0);
     br_hmac_update(&ctx, data, len);
     br_hmac_out(&ctx, out);
-
+ 
     return 32;
 }
-
+ 
 int
 aes_decrypt(char* key, char* iv, char* ct, int len) {
     br_block_cbcdec_class* vd = &br_aes_big_cbcdec_vtable;
     br_aes_gen_cbcdec_keys v_dc;
     const br_block_cbcdec_class **dc;
-
+ 
     dc = &v_dc.vtable;
     vd->init(dc, key, KEY_LEN);
     vd->run(dc, iv, ct, len);
-
+ 
     return 1;
 }
-
+ 
 static void
 test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key)
@@ -419,7 +419,7 @@ test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 	size_t ikm_len, salt_len, info_len, okm_len;
 	br_hkdf_context hc;
 	size_t u;
-
+ 
 	ikm_len = hextobin(ikm, ikmhex);
 	if (salthex == NULL) {
 		salt = BR_HKDF_NO_SALT;
@@ -430,13 +430,13 @@ test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 	}
 	info_len = hextobin(info, infohex);
 	okm_len = hextobin(okm, okmhex);
-
+ 
 	br_hkdf_init(&hc, dig, salt, salt_len);
 	br_hkdf_inject(&hc, ikm, ikm_len);
 	br_hkdf_flip(&hc);
 	br_hkdf_produce(&hc, info, info_len, key, okm_len);
 	//check_equals("KAT HKDF 1", tmp, okm, okm_len);
-
+ 
 	// for(int i = 0; i < okm_len; i ++){
   //   printf("%02x", key[i]);
   // }
@@ -449,7 +449,7 @@ hextobin(unsigned char *dst, const char *src)
 	size_t num;
 	unsigned acc;
 	int z;
-
+ 
 	num = 0;
 	z = 0;
 	acc = 0;
