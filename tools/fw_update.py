@@ -93,10 +93,11 @@ def main(ser, infile, debug):
             data = fp.read(50)
             fp.read(1)
             if data == b'\x00\x00':
-                ser.write(0, 0)
+                #ser.write(0,0)
                 break
             # get length of data
-            length = int(data[:2])
+            length, = struct.unpack('>h', data[:2])
+            print(length)
             frame_fmt = '>H48s'
             data = data[2:]
             # Construct frame.

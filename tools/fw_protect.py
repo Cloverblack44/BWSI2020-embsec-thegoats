@@ -60,15 +60,15 @@ def protect_firmware(infile, outfile, version, message):
         MACkey.update(firmware)
         bigMAC = MACkey.digest()
         length -= 16
-        firmware_blob.write(b'16' + firmware + bigMAC + b'\n')
+        firmware_blob.write(struct.pack('>h', 16) + firmware + bigMAC + b'\n')
     if not(length == 0):
         firmware = cipher.encrypt(pad(fp.read(length), 16))
         MACkey = HMAC.new(HMACkey, digestmod=SHA256)
         MACkey.update(firmware)
         bigMAC = MACkey.digest()
-        firmware_blob.write(bytes(length) + firmware+b'\n')
+        firmware_blob.write(struct.pack('>h', length) + firmware+ bigMAC + b'\n')
     # null terminator
-    firmware_blob.write(b"00\n")
+    firmware_blob.write(b"\x00\x00")
     
     
 # ---------------------------trash code -------------------------------

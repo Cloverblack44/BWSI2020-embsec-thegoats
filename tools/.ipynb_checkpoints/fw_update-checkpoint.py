@@ -92,8 +92,12 @@ def main(ser, infile, debug):
             idv += 1
             data = fp.read(50)
             fp.read(1)
+            if data == b'\x00\x00':
+                #ser.write(0,0)
+                break
             # get length of data
-            length = int(data[:2])
+            length, = struct.unpack('>h', data[:2])
+            print(length)
             frame_fmt = '>H48s'
             data = data[2:]
             # Construct frame.
@@ -104,9 +108,6 @@ def main(ser, infile, debug):
 
             send_frame(ser, frame, debug=debug)
             print("sending frame", idv)
-            if length == 0:
-                ser.write(0, 0)
-                break
 #         for idx, frame_start in enumerate(range(0, len(firmware), FRAME_SIZE)):
 #             data = firmware[frame_start: frame_start + FRAME_SIZE]
 
