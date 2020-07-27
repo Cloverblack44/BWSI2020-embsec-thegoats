@@ -93,20 +93,22 @@ def main(ser, infile, debug):
             data = fp.read(50)
             fp.read(1)
             # get length of data
-            length = int(data[:2])
+            length = int(data[:2].hex(), 16)
+            print(length)
             frame_fmt = '>H48s'
             data = data[2:]
-            # Construct frame.
-            frame = struct.pack(frame_fmt, length, data)
-            
-            if debug:
-                print("Writing frame {} ({} bytes)...".format(idx, len(frame)))
-
-            send_frame(ser, frame, debug=debug)
-            print("sending frame", idv)
             if length == 0:
-                ser.write(0, 0)
+                ser.write("<H48s", 0, data)
                 break
+            else:
+            # Construct frame.
+                frame = struct.pack(frame_fmt, length, data)
+            
+                if debug:
+                    print("Writing frame {} ({} bytes)...".format(idx, len(frame)))
+
+                send_frame(ser, frame, debug=debug)
+                print("sending frame", idv)
 #         for idx, frame_start in enumerate(range(0, len(firmware), FRAME_SIZE)):
 #             data = firmware[frame_start: frame_start + FRAME_SIZE]
 

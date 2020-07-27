@@ -68,7 +68,7 @@ def protect_firmware(infile, outfile, version, message):
         bigMAC = MACkey.digest()
         firmware_blob.write(bytes(length) + firmware+b'\n')
     # null terminator
-    firmware_blob.write(b"00\n")
+    firmware_blob.write(pad(b"00"),50)
     
     
 # ---------------------------trash code -------------------------------
