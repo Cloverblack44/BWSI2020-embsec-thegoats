@@ -28,12 +28,6 @@ RESP_OK = b'\x00'
 FRAME_SIZE = 16
  
 def send_metadata(ser, metadata, debug=False):
-    """
-    Name: send_metadata(serial, metadata, debug)
-    This function takes in a bytestring, metadata, 
-    
-    
-    """
     version, size, iv , salt, MAC = struct.unpack_from('<HH16s32s32s', metadata)
     print(f'Version: {version}\nSize: {size} bytes\n')
  
