@@ -1,6 +1,6 @@
 """
 Firmware Bundle-and-Protect Tool
-
+ 
 """
 import argparse
 import struct
@@ -13,7 +13,7 @@ import random
 from Crypto.Protocol.KDF import HKDF
 from Crypto.Hash import HMAC, SHA256, SHA512
 from Crypto.Random import get_random_bytes
-
+ 
 
 def generate_keys_hkdf(mySalt):
     #Crypto.Protocol.KDF.HKDF(master, key_len, salt, hashmod, num_keys=1, context=None)
@@ -21,7 +21,7 @@ def generate_keys_hkdf(mySalt):
         password = fp.read()
     key1, key2 = HKDF(password, 16, mySalt, SHA512, 2)
     return key1, key2
-
+ 
 
 def protect_firmware(infile, outfile, version, message):
     # Load firmware binary from infile
@@ -38,7 +38,7 @@ def protect_firmware(infile, outfile, version, message):
     print(HMACkey.hex())
     # generate cipher
     cipher = AES.new(AESkey, AES.MODE_CBC)
-    
+ 
     MACkey = HMAC.new(HMACkey1, digestmod=SHA256)
     MACkey.update(struct.pack('<HH16s32s', version, length, cipher.iv, salt))
     bigMAC = MACkey.digest()
@@ -46,7 +46,7 @@ def protect_firmware(infile, outfile, version, message):
     # [ version #] | [firmware size] | [ cipher iv] | [salt] | [HMAC]
     # [0x02]       | [0x02]          | [0x10]       | [0x20] | [0x20] in bytes
     metadata = struct.pack('<HH16s32s32s', version, length, cipher.iv, salt, bigMAC)
-    
+ 
     with open(outfile, 'wb+') as out:
         out.write(metadata + b'\n')
     # writes to the file 16 bytes at a time
@@ -68,45 +68,41 @@ def protect_firmware(infile, outfile, version, message):
         bigMAC = MACkey.digest()
         firmware_blob.write(struct.pack('>h', length) + firmware+ bigMAC + b'\n')
     # null terminator
-<<<<<<< HEAD
-    firmware_blob.write(pad(b"00"),50)
-=======
     firmware_blob.write(b"\x00\x00")
->>>>>>> 98f1988a59e89f13ebe09ffddae4d049bcaa6de4
-    
-    
+ 
+ 
 # ---------------------------trash code -------------------------------
 #     # Append null-terminated message to end of firmware
-    
+ 
 #     # generate keys
 #     salt = get_random_bytes(32)
 #     AESkey, HMACkey = generate_keys_hkdf(salt)
-    
+ 
 #     length = len(firmware)
 #     # Creates the ciphertext
 #     cipher = AES.new(AESkey, AES.MODE_CBC)
 #     firmware = cipher.encrypt(pad(firmware, 16))
-    
+ 
 #     # MAC generation
 #     MACkey = HMAC.new(HMACkey, digestmod=SHA256)
 #     MACkey.update(firmware)
 #     bigMAC = MACkey.digest()
-    
+ 
 #     # message is not encrypted
 #     firmware_and_message = firmware + bigMAC + message.encode() + b'\00'
 #     # Pack version and size into two little-endian shorts
 #     # [ version #] | [firmware size] | [ cipher iv] | [salt]
 #     # [0x02]       | [0x02]          | [0x10]       | [0x20] in bytes
 #     metadata = struct.pack('<HH16x32x', version, length, cipher.iv, salt)
-    
+ 
 #     # Append firmware and message to metadata
 #     firmware_blob = metadata + firmware_and_message
-
+ 
 #     # Write firmware blob to outfile
 #     with open(outfile, 'wb+') as outfile:
 #         outfile.write(firmware_blob)
 # -------------------------------------------------------------------------------
-
+ 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Firmware Update Tool')
     parser.add_argument("--infile", help="Path to the firmware image to protect.", required=True)
@@ -114,5 +110,5 @@ if __name__ == '__main__':
     parser.add_argument("--version", help="Version number of this firmware.", required=True)
     parser.add_argument("--message", help="Release message for this firmware.", required=True)
     args = parser.parse_args()
-
+ 
     protect_firmware(infile=args.infile, outfile=args.outfile, version=int(args.version), message=args.message)

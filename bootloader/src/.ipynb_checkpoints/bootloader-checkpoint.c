@@ -18,6 +18,7 @@ void load_initial_firmware(void);
 void load_firmware(void);
 void boot_firmware(void);
 long program_flash(uint32_t, unsigned char*, unsigned int);
+
 static void
 test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key);
@@ -84,6 +85,7 @@ int main(void) {
   uart_write_str(UART2, "Send \"U\" to update, and \"B\" to run the firmware.\n");
   uart_write_str(UART2, "Writing 0x20 to UART0 will reset the device.\n");
  
+  // Wait for boot or update instruction
   int resp;
   while (1){
     uint32_t instruction = uart_read(UART1, BLOCKING, &resp);
@@ -127,26 +129,39 @@ void load_initial_firmware(void) {
   }
   program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) data) + (i * FLASH_PAGESIZE), size % FLASH_PAGESIZE);
 }
- 
+
 /*
  * Load the firmware into flash.
  */
 void load_firmware(void)
 {
+  /* This function uses UART to load firmware onto the bootloader
+  inputs: None
+  Outputs: None
+  This function takes a metadata package from UART1 and checks the authenticity of it with HMAC. It then takes frames of firmware where it checks its authencitiy and decrypt.
+  */  
+  // This is just a huge list of declared variables
+    // used for debugging purposes
   char passW[16] = {48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48};
+    // determines how much data is being passed through a frame
   int frame_length = 0;
   int read = 0;
+    // temporary data array to prevent changing data array
   char temporary_data[16];
+    // used to makea cumulaiton of all the metadata so we can HMAC
   char comboMetadata[52];
+    // these variables are assigned when metadata is read
   char HMAC[32];
   char IV[16];
   char salt[32];
   uint32_t rcv = 0;
+    // this variable is used as the output for HMAC
   unsigned char output[32];
   uint32_t data_index = 0;
   uint32_t page_addr = FW_BASE;
   uint32_t version = 0;
   uint32_t size = 0;
+    // keys provisioned from the server.
   char passwordKey[32] = mySalt;
   char metadataKey[16] = myMETADATA_HMAC;
   //create variable buffers to hold key
@@ -202,8 +217,9 @@ void load_firmware(void)
   }
   uart_write_str(UART2, "Received HMAC");
   uart_write_hex(UART2, size);
-  nl(UART2); 
- 
+  nl(UART2);
+    
+  // HMACing
     sha_hmac(
         metadataKey,
         16, //size of key
@@ -225,6 +241,8 @@ void load_firmware(void)
     "0000000000000000000000000000000000000000000000000000000000000000",
     key); //length of key
   }
+    
+    // assign the keys we generate to variables
     for (int i = 0; i <= 15; i++){
         aes_key[i] = key[i];
         hmac_key[i] = key[i + 16];
@@ -262,24 +280,23 @@ void load_firmware(void)
     frame_length += (int)rcv;
     uart_write_str(UART2, "got frame_length\n");
     uart_write(UART2, frame_length);
-    if (frame_length == 0) {
-        break;
-    }
+      
     // Write length debug message
     uart_write_hex(UART2,(unsigned char)rcv);
     nl(UART2);
  
-    // Get the number of bytes specified
+    // Get encrypted firmware
     for (int i = 0; i < 16; i++){
         temporary_data[i] = uart_read(UART1, BLOCKING, &read);
         data_index += 1;
     }
     uart_write_str(UART2, "got data\n");
+    // get HMAC of encrypted firmware
     for (int i = 0; i<32; i++){
         HMAC[i] = uart_read(UART1, BLOCKING, &read);
     } 
     uart_write_str(UART2, "got HMAC\n");
-      //for
+
     // Verify the frame
 	sha_hmac(
 	passW,
@@ -387,6 +404,10 @@ void boot_firmware(void)
  
 int
 sha_hmac(char* key, int key_len, char* data, int len, char* out) {
+/* this code HMACs code using SHA256
+Inputs: key, key length, data, data length, and output
+This funciton uses a key to HMAC given data and assigns it to the output variable
+*/
     br_hmac_key_context kc;
     br_hmac_context ctx;
     br_hmac_key_init(&kc, &br_sha256_vtable, key, key_len);
@@ -399,6 +420,7 @@ sha_hmac(char* key, int key_len, char* data, int len, char* out) {
  
 int
 aes_decrypt(char* key, char* iv, char* ct, int len) {
+// This function decrypts a cipher with a key and iv. It overwrites whatever variable is passed in as ct
     br_block_cbcdec_class* vd = &br_aes_big_cbcdec_vtable;
     br_aes_gen_cbcdec_keys v_dc;
     const br_block_cbcdec_class **dc;
@@ -414,6 +436,7 @@ static void
 test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
 	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key)
 {
+    // This function uses HKDF ot generate pseudorandom keys.
 	unsigned char ikm[100], saltbuf[100], info[100], okm[100], tmp[107], res[107];
 	const unsigned char *salt;
 	size_t ikm_len, salt_len, info_len, okm_len;
