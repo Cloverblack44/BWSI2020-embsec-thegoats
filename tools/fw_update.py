@@ -29,7 +29,7 @@ FRAME_SIZE = 16
 
 
 def send_metadata(ser, metadata, debug=False):
-    version, size, iv , salt, MAC= struct.unpack_from('<HH16s32s32s', metadata)
+    version, size, iv , salt, MAC = struct.unpack_from('<HH16s32s32s', metadata)
     print(f'Version: {version}\nSize: {size} bytes\n')
 
     # Handshake for update
@@ -56,14 +56,12 @@ def send_metadata(ser, metadata, debug=False):
     ser.read()
 
 def send_frame(ser, frame, debug=False):
-    print("sending frame")
     ser.write(frame)  # Write the frame...
 
     if debug:
         print(frame)
 
     resp = ser.read()  # Wait for an OK from the bootloader
-    print(resp)
     time.sleep(0.1)
     
     if resp == 3:
@@ -92,9 +90,9 @@ def main(ser, infile, debug):
         while True:
             # write 16 byte frames to the stellaris
             idv += 1
-            data = fp.read(16)
+            data = fp.read(50)
             fp.read(1)
-            if data == '\0':
+            if data == b'\x00\x00':
                 ser.write(0, 0)
                 break
             # get length of data
@@ -103,12 +101,12 @@ def main(ser, infile, debug):
             data = data[2:]
             # Construct frame.
             frame = struct.pack(frame_fmt, length, data)
-
+            
             if debug:
                 print("Writing frame {} ({} bytes)...".format(idx, len(frame)))
 
             send_frame(ser, frame, debug=debug)
-
+            print("sending frame", idv)
 #         for idx, frame_start in enumerate(range(0, len(firmware), FRAME_SIZE)):
 #             data = firmware[frame_start: frame_start + FRAME_SIZE]
 

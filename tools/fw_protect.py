@@ -20,8 +20,6 @@ def generate_keys_hkdf(mySalt):
     with open('secret_build_output.txt', 'rb') as fp:
         password = fp.read()
     key1, key2 = HKDF(password, 16, mySalt, SHA512, 2)
-    print(key1)
-    print(key2)
     return key1, key2
 
 
@@ -35,11 +33,9 @@ def protect_firmware(infile, outfile, version, message):
     salt = passwords.read(32)
     passwords.read(1)
     HMACkey1 = passwords.read(16)
-    print(HMACkey1)
-    print(len(HMACkey1))
     passwords.read(1)
     AESkey, HMACkey = generate_keys_hkdf(salt)
-    
+    print(HMACkey.hex())
     # generate cipher
     cipher = AES.new(AESkey, AES.MODE_CBC)
     
@@ -55,23 +51,24 @@ def protect_firmware(infile, outfile, version, message):
         out.write(metadata + b'\n')
     # writes to the file 16 bytes at a time
     firmware_blob = open(outfile, 'ab')
-    while length > 16:
+    HMACkey = b'0000000000000000'
+    while length >= 16:
         fp = open(infile, 'rb')
-        firmware = cipher.encrypt(pad(fp.read(16), 16))
+        firmware = cipher.encrypt(fp.read(16))
         # I have to reset the HMAC each time unfort
         MACkey = HMAC.new(HMACkey, digestmod=SHA256)
         MACkey.update(firmware)
         bigMAC = MACkey.digest()
         length -= 16
         firmware_blob.write(b'16' + firmware + bigMAC + b'\n')
-
-    firmware = cipher.encrypt(pad(fp.read(length), 16))
-    MACkey = HMAC.new(HMACkey, digestmod=SHA256)
-    MACkey.update(firmware)
-    bigMAC = MACkey.digest()
-    firmware_blob.write(bytes(length) + firmware+b'\n')
+    if not(length == 0):
+        firmware = cipher.encrypt(pad(fp.read(length), 16))
+        MACkey = HMAC.new(HMACkey, digestmod=SHA256)
+        MACkey.update(firmware)
+        bigMAC = MACkey.digest()
+        firmware_blob.write(bytes(length) + firmware+b'\n')
     # null terminator
-    firmware_blob.write(b"\0\n")
+    firmware_blob.write(b"00\n")
     
     
 # ---------------------------trash code -------------------------------

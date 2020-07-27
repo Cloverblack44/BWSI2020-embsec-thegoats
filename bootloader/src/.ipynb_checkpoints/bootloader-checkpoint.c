@@ -133,6 +133,7 @@ void load_initial_firmware(void) {
  */
 void load_firmware(void)
 {
+  char passW[16] = {48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48};
   int frame_length = 0;
   int read = 0;
   char temporary_data[16];
@@ -194,7 +195,7 @@ void load_firmware(void)
   uart_write_str(UART2, "Received salt");
   uart_write_hex(UART2, size);
   nl(UART2); 
-
+    
   // get HMAC
   for (int i = 0; i < 32; i++) {
       HMAC[i] = uart_read(UART1, BLOCKING, &read);
@@ -227,8 +228,9 @@ void load_firmware(void)
     for (int i = 0; i <= 15; i++){
         aes_key[i] = key[i];
         hmac_key[i] = key[i + 16];
-        }
-      
+        }    
+    
+    
   uart_write_str(UART2, "Received Metadata");
   // Compare to old version and abort if older (note special case for version 0).
   uint16_t old_version = *fw_version_address;
@@ -278,29 +280,27 @@ void load_firmware(void)
     } 
     uart_write_str(UART2, "got HMAC\n");
       //for
-
     // Verify the frame
 	sha_hmac(
-	hmac_key,
+	passW,
 		16, //size of key
 		temporary_data,
 		16, //firmware size
 		output);
     uart_write_str(UART2, "verifying \n");
-    uart_write_str(UART2, output + '\n');
-    uart_write_str(UART2, HMAC + '\n');
+
     // if tampered return error and reset
     if(memcmp(HMAC,output, 32) != 0){
         uart_write_str(UART2, "failed verification\n");
         uart_write(UART1, 3);
         continue;
     }
-    
+    uart_write_str(UART2, "verified \n");
 
     // Decrypt
     uart_write_str(UART2, "trying to decrypt \n");
     aes_decrypt(aes_key, IV, temporary_data, 16);
-    // fix this
+    // transfers temporary_data to data (1Kb array)
     for (int i = 0; i < frame_length; i++ ){
         data[data_index - 16 + i] = temporary_data[i];
     }
