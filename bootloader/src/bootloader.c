@@ -169,7 +169,7 @@ void load_firmware(void)
   unsigned char hmac_key[16];
   unsigned char aes_key[16];
   uint32_t release_message_length = 0;
-  
+    
   // Get version.
   rcv = uart_read(UART1, BLOCKING, &read);
   comboMetadata[0] = rcv;
@@ -221,7 +221,6 @@ void load_firmware(void)
   }
   uart_write_str(UART2, "Received salt");
   nl(UART2); 
-
     
   char release_message[1024];
   // get message
@@ -250,9 +249,6 @@ void load_firmware(void)
         54+release_message_length, //metadata size
         output);
     
-  uart_write_hex(UART2, output);
-  uart_write_str(UART2, "separate");
-  uart_write_hex(UART2, HMAC);
   // if tampered return error and reset
   if(memcmp(HMAC,output, 32) != 0){
       uart_write_str(UART2, "OOP");
@@ -264,18 +260,31 @@ void load_firmware(void)
         passwordKey, //master key
         salt, //salt
         "",	//leave blank
-    "0000000000000000000000000000000000000000000000000000000000000000",
-    key); //length of key
+    "0000000000000000000000000000000000000000000000000000000000000000", //length of key
+    key); 
   }
     
     // assign the keys we generate to variables
     for (int i = 0; i <= 15; i++){
         aes_key[i] = key[i];
         hmac_key[i] = key[i + 16];
-        }    
- 
- 
-  uart_write_str(UART2, "Received Metadata");
+        }
+      
+    for (int i = 0; i < 32; i++){
+        uart_write_hex(UART2, passwordKey[i]);
+        uart_write_str(UART2, "\r\n");
+    }
+    uart_write_str(UART2, "\r\n");
+    for (int i = 0; i < 16; i++){
+        uart_write_hex(UART2, aes_key[i]);
+        uart_write_str(UART2, "\r\n");
+    }
+    uart_write_str(UART2, "\r\n");
+    for (int i = 0; i < 16; i++){
+        uart_write_hex(UART2, hmac_key[i]);
+        uart_write_str(UART2, "\r\n");
+    }
+    
   // Compare to old version and abort if older (note special case for version 0).
   uint16_t old_version = *fw_version_address;
  
@@ -326,7 +335,7 @@ void load_firmware(void)
 
         // Verify the frame
         sha_hmac(
-        passW,
+        hmac_key,
             16, //size of key
             temporary_data,
             16, //firmware size
@@ -461,38 +470,32 @@ aes_decrypt(char* key, char* iv, char* ct, int len) {
  
 static void
 test_HKDF_inner(const br_hash_class *dig, const char *ikmhex,
-	const char *salthex, const char *infohex, const char *okmhex,unsigned char *key)
+    const char *salthex, const char *infohex, const char *okmhex,unsigned char *key)
 {
-    // This function uses HKDF ot generate pseudorandom keys.
-	unsigned char ikm[100], saltbuf[100], info[100], okm[100], tmp[107], res[107];
-	const unsigned char *salt;
-	size_t ikm_len, salt_len, info_len, okm_len;
-	br_hkdf_context hc;
-	size_t u;
- 
-	ikm_len = hextobin(ikm, ikmhex);
-	if (salthex == NULL) {
-		salt = BR_HKDF_NO_SALT;
-		salt_len = 0;
-	} else {
-		salt = saltbuf;
-		salt_len = hextobin(saltbuf, salthex);
-	}
-	info_len = hextobin(info, infohex);
-	okm_len = hextobin(okm, okmhex);
- 
-	br_hkdf_init(&hc, dig, salt, salt_len);
-	br_hkdf_inject(&hc, ikm, ikm_len);
-	br_hkdf_flip(&hc);
-	br_hkdf_produce(&hc, info, info_len, key, okm_len);
-	//check_equals("KAT HKDF 1", tmp, okm, okm_len);
- 
-	// for(int i = 0; i < okm_len; i ++){
-  //   printf("%02x", key[i]);
-  // }
-// printf("...");
-// fflush(stdout);
+    unsigned char ikm[100], saltbuf[100], info[100], okm[100], tmp[107], res[107];
+    const unsigned char *salt;
+    size_t ikm_len, salt_len, info_len, okm_len;
+    br_hkdf_context hc;
+    size_t u;
+
+    ikm_len = hextobin(ikm, ikmhex);
+    if (salthex == NULL) {
+        salt = BR_HKDF_NO_SALT;
+        salt_len = 0;
+    } else {
+        salt = saltbuf;
+        salt_len = hextobin(saltbuf, salthex);
+    }
+    info_len = hextobin(info, infohex);
+    okm_len = hextobin(okm, okmhex);
+
+    br_hkdf_init(&hc, dig, salt, salt_len);
+    br_hkdf_inject(&hc, ikm, ikm_len);
+    br_hkdf_flip(&hc);
+    br_hkdf_produce(&hc, info, info_len, key, okm_len);
+    //check_equals("KAT HKDF 1", tmp, okm, okm_len);
 }
+
 static size_t
 hextobin(unsigned char *dst, const char *src)
 {
