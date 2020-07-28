@@ -69,8 +69,8 @@ def send_frame(ser, frame, debug=False):
             print("in while loop")
             ser.write(frame)
             resp = ser.read()
-            time.sleep(0.2)
- 
+            time.sleep(0.1)
+    time.sleep(0.1)
     if resp != RESP_OK:
         raise RuntimeError("ERROR: Bootloader responded with {}".format(repr(resp)))
  
