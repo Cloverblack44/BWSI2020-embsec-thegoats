@@ -27,8 +27,11 @@ from serial import Serial
 RESP_OK = b'\x00'
 FRAME_SIZE = 16
  
-def send_metadata(ser, metadata, debug=False):
-    version, size, iv , salt, MAC = struct.unpack_from('<HH16s32s32s', metadata)
+def send_metadata(ser, metadata, message_length, debug=False):
+    """
+    Takes the file metadata and sends it as a frame to the bootloader.
+    """
+    version, size, length, iv , salt, message, MAC = struct.unpack_from(f'<HH16s32s32sH{message_length}s', metadata)
     print(f'Version: {version}\nSize: {size} bytes\n')
  
     # Handshake for update
@@ -47,7 +50,7 @@ def send_metadata(ser, metadata, debug=False):
     # Wait for an OK from the bootloader.
     resp = ser.read()
     print(resp)
-    if resp == 3:
+    if resp == b'\x03':
         raise RuntimeError('Frame did not verify')
  
     if resp != RESP_OK:
@@ -64,7 +67,7 @@ def send_frame(ser, frame, debug=False):
     resp = ser.read()  # Wait for an OK from the bootloader
     time.sleep(0.1)
  
-    if resp == 3:
+    if resp == b'\x03':
         while resp != RESP_OK:
             print("in while loop")
             ser.write(frame)
@@ -83,10 +86,12 @@ def main(ser, infile, debug):
     idv = 0
     with open(infile, 'rb') as fp:
         # write the metadata to teh stellaris
-        metadata = fp.read(84)
+        message_length = struct.unpack(">h", fp.read(2))[0]
         fp.read(1)
- 
-        send_metadata(ser, metadata, debug=debug)
+        print(message_length)
+        metadata = fp.read(86+message_length)
+        fp.read(1)
+        send_metadata(ser, metadata, message_length, debug=True)
         while True:
             # write 16 byte frames to the stellaris
             idv += 1
@@ -108,21 +113,7 @@ def main(ser, infile, debug):
  
             send_frame(ser, frame, debug=debug)
             print("sending frame", idv)
-#         for idx, frame_start in enumerate(range(0, len(firmware), FRAME_SIZE)):
-#             data = firmware[frame_start: frame_start + FRAME_SIZE]
- 
-#             # Get length of data.
-#             length = len(data)
-#             frame_fmt = '>H{}s'.format(length)
- 
-#             # Construct frame.
-#             frame = struct.pack(frame_fmt, length, data)
- 
-#             if debug:
-#                 print("Writing frame {} ({} bytes)...".format(idx, len(frame)))
- 
-#             send_frame(ser, frame, debug=debug)
- 
+        
         print("Done writing firmware.")
  
         # Send a zero length payload to tell the bootlader to finish writing it's page.

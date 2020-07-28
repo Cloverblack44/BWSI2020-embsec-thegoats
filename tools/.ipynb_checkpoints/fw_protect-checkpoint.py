@@ -66,16 +66,17 @@ def protect_firmware(infile, outfile, version, message):
  
     # generate cipher
     cipher = AES.new(AESkey, AES.MODE_CBC)
- 
+    message = message.strip("\n").encode()
     MACkey = HMAC.new(HMACkey1, digestmod=SHA256)
-    MACkey.update(struct.pack('<HH16s32s', version, length, cipher.iv, salt))
+    MACkey.update(struct.pack(f'<HHH16s32s{len(message)}s', version, length, len(message), cipher.iv, salt, message))
+    
     bigMAC = MACkey.digest()
- 
-    metadata = struct.pack('<HH16s32s32s', version, length, cipher.iv, salt, bigMAC)
- 
+    
+    metadata = struct.pack(f'<HHH16s32s{len(message)}s32s', version, length, len(message), cipher.iv, salt, message, bigMAC)
+    
     #writes metadata along with encrypted and hashed firmware data to outfile 
     with open(outfile, 'wb+') as out:
-        out.write(metadata + b'\n')
+        out.write(struct.pack('>h', len(message)) + b"\n" + metadata + b'\n')
     # writes to the file 16 bytes at a time
     firmware_blob = open(outfile, 'ab')
     HMACkey = b'0000000000000000' #specifies the length of the HMAC key

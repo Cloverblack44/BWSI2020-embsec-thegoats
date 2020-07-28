@@ -149,7 +149,7 @@ void load_firmware(void)
     // temporary data array to prevent changing data array
   char temporary_data[16];
     // used to makea cumulaiton of all the metadata so we can HMAC
-  char comboMetadata[52];
+  char comboMetadata[1080];
     // these variables are assigned when metadata is read
   char HMAC[32];
   char IV[16];
@@ -168,7 +168,8 @@ void load_firmware(void)
   unsigned char key[32];
   unsigned char hmac_key[16];
   unsigned char aes_key[16];
- 
+  uint32_t release_message_length = 0;
+  
   // Get version.
   rcv = uart_read(UART1, BLOCKING, &read);
   comboMetadata[0] = rcv;
@@ -193,10 +194,22 @@ void load_firmware(void)
   uart_write_hex(UART2, size);
   nl(UART2);
  
+  // get release message size
+  rcv = uart_read(UART1, BLOCKING, &read);
+  comboMetadata[4] = rcv;
+  release_message_length = (uint32_t)rcv;
+  rcv = uart_read(UART1, BLOCKING, &read);
+  comboMetadata[5] = rcv;
+  release_message_length |= (uint32_t)rcv << 8;
+    
+  uart_write_str(UART2, "got message size");
+  uart_write_hex(UART2, release_message_length);
+  nl(UART2);
+    
   // Get cipherIV.
   for (int i = 0; i < 16; i++) {
       IV[i] = uart_read(UART1, BLOCKING, &read);
-      comboMetadata[4+i] = IV[i];
+      comboMetadata[6+i] = IV[i];
   }
   uart_write_str(UART2, "Received cipherIV");
   uart_write_hex(UART2, size);
@@ -205,12 +218,23 @@ void load_firmware(void)
   // get salt
   for (int i = 0; i < 32; i++) {
       salt[i] = uart_read(UART1, BLOCKING, &read);
-      comboMetadata[20+i] = salt[i];
+      comboMetadata[22+i] = salt[i];
   }
   uart_write_str(UART2, "Received salt");
   uart_write_hex(UART2, size);
   nl(UART2); 
- 
+
+    
+  char release_message[release_message_length];
+  // get message
+  for (int i = 0; i < release_message_length; i++) {
+      release_message[i] = uart_read(UART1, BLOCKING, &read);
+      comboMetadata[54+i] = salt[i];
+      uart_write_hex(UART2, release_message[i]);
+  }
+  uart_write_str(UART2, "Received message");
+  nl(UART2); 
+    
   // get HMAC
   for (int i = 0; i < 32; i++) {
       HMAC[i] = uart_read(UART1, BLOCKING, &read);
@@ -224,7 +248,7 @@ void load_firmware(void)
         metadataKey,
         16, //size of key
         comboMetadata,
-        52, //firmware size
+        54+release_message_length, //metadata size
         output);
  
   // if tampered return error and reset
@@ -266,8 +290,9 @@ void load_firmware(void)
   // Create 32 bit word for flash programming, version is at lower address, size is at higher address
   uint32_t metadata = ((size & 0xFFFF) << 16) | (version & 0xFFFF);
   program_flash(METADATA_BASE, (uint8_t*)(&metadata), 4);
+
   fw_release_message_address = (uint8_t *) (FW_BASE + size);
- 
+  program_flash(fw_release_message_address, release_message, release_message_length);
   uart_write(UART1, OK); // Acknowledge the metadata.
  
   /* Loop here until you can get all your characters and stuff */
@@ -284,7 +309,12 @@ void load_firmware(void)
     // Write length debug message
     uart_write_hex(UART2,(unsigned char)rcv);
     nl(UART2);
- 
+      
+    if (frame_length == 0) {
+        uart_write(UART1, '\x00');
+        uart_write_str(UART2, 'I returned');
+        main();
+    }
     // Get encrypted firmware
     for (int i = 0; i < 16; i++){
         temporary_data[i] = uart_read(UART1, BLOCKING, &read);
@@ -345,12 +375,7 @@ void load_firmware(void)
       data_index = 0;
  
       // If at end of firmware, go to main
-      if (frame_length == 0) {
-        uart_write(UART1, '\x00');
-        break;
-      }
     } // if
- 
     uart_write(UART1, OK); // Acknowledge the frame.
   } // while(1)
 }
