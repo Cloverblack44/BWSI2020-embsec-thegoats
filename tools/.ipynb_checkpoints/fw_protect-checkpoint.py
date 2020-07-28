@@ -80,23 +80,23 @@ def protect_firmware(infile, outfile, version, message):
     # writes to the file 16 bytes at a time
     firmware_blob = open(outfile, 'ab')
     #specifies the length of the HMAC key
-    while length >= 16:
-        fp = open(infile, 'rb')
-        firmware = cipher.encrypt(fp.read(16))
-        # I have to reset the HMAC each time unfort
-        MACkey = HMAC.new(HMACkey, digestmod=SHA256)
-        MACkey.update(firmware)
-        bigMAC = MACkey.digest()
-        length -= 16
-        firmware_blob.write(struct.pack('>h', 16) + firmware + bigMAC + b'\n')
-    if not(length == 0):
-        firmware = cipher.encrypt(pad(fp.read(length), 16))
-        MACkey = HMAC.new(HMACkey, digestmod=SHA256)
-        MACkey.update(firmware)
-        bigMAC = MACkey.digest()
-        firmware_blob.write(struct.pack('>h', length) + firmware+ bigMAC + b'\n')
-    # null terminator
-    firmware_blob.write(b"\x00\x00")
+    with open(infile, 'rb') as fp:
+        while length >= 16:
+            firmware = cipher.encrypt(fp.read(16))
+            # I have to reset the HMAC each time unfort
+            MACkey = HMAC.new(HMACkey, digestmod=SHA256)
+            MACkey.update(firmware)
+            bigMAC = MACkey.digest()
+            length -= 16
+            firmware_blob.write(struct.pack('>h', 16) + firmware + bigMAC + b'\n')
+        if not(length == 0):
+            firmware = cipher.encrypt(pad(fp.read(length), 16))
+            MACkey = HMAC.new(HMACkey, digestmod=SHA256)
+            MACkey.update(firmware)
+            bigMAC = MACkey.digest()
+            firmware_blob.write(struct.pack('>h', length) + firmware+ bigMAC + b'\n')
+        # null terminator
+        firmware_blob.write(b"\x00\x00")
  
  
 if __name__ == '__main__':
