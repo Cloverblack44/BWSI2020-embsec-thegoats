@@ -227,17 +227,14 @@ void load_firmware(void)
   for (int i = 0; i < release_message_length; i++) {
       release_message[i] = uart_read(UART1, BLOCKING, &read);
       comboMetadata[54+i] = release_message[i];
-      uart_write_hex(UART2, release_message[i]);
   }
   uart_write_str(UART2, "Received message");
   nl(UART2); 
-  uart_write_str(UART2, release_message);
     
   // get HMAC
   for (int i = 0; i < 32; i++) {
       HMAC[i] = uart_read(UART1, BLOCKING, &read);
   }
-    
   uart_write_str(UART2, "Received HMAC");
   nl(UART2);
     
@@ -302,8 +299,8 @@ void load_firmware(void)
   uint32_t metadata = ((size & 0xFFFF) << 16) | (version & 0xFFFF);
   program_flash(METADATA_BASE, (uint8_t*)(&metadata), 4);
 
-//   fw_release_message_address = (uint8_t *) (FW_BASE + 5*FLASH_PAGESIZE);
-//   program_flash(FW_BASE + 5*FLASH_PAGESIZE, release_message, release_message_length);
+  fw_release_message_address = (uint8_t *) (FW_BASE + size);
+  program_flash(FW_BASE + size, release_message, release_message_length);
   uart_write(UART1, OK); // Acknowledge the metadata.
  
   /* Loop here until you can get all your characters and stuff */
@@ -373,10 +370,11 @@ void load_firmware(void)
           uart_write_str(UART2, "Page successfully programmed\nAddress: ");
           uart_write_hex(UART2, page_addr);
           uart_write_str(UART2, "\nBytes: ");
-          uart_write_hex(UART2, data_index);
+          uart_write_hex(UART2, data_index-16+frame_length);
           nl(UART2);
     #endif
           for (int i = 0; i < data_index-16+frame_length; i++){
+              uart_write_hex(UART2, i+1);
               uart_write_hex(UART2, data[i]);
               uart_write_str(UART2, "\r\n");
           }

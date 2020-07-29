@@ -16,7 +16,6 @@ from Crypto.Random import get_random_bytes
 
 def generate_keys_hkdf(password, mySalt):
     """reads in salt from secre_build_output.txt and produces two keys"""
-    print(password.hex())
     key1, key2 = HKDF(password, 16, mySalt, SHA512, 2)
     return key1, key2
  
@@ -57,19 +56,18 @@ def protect_firmware(infile, outfile, version, message):
     # generate keys
     passwords = open("/home/jovyan/design-challenge-t-h-g-o-a-t-s/bootloader/secret_build_output.txt", 'rb')
     salt = get_random_bytes(32)
-    print(salt[0], salt[1], salt[2],salt[3], salt[4], salt[5],salt[6], salt[7], salt[8])
     masterPassword = passwords.read(32)
     passwords.read(1)
     HMACkey1 = passwords.read(16)
     passwords.read(1)
     AESkey, HMACkey = generate_keys_hkdf(masterPassword, salt)
-    print(AESkey[0], AESkey[1], AESkey[2],AESkey[3], AESkey[4], AESkey[5],AESkey[6], AESkey[7], AESkey[8])
-    print(HMACkey[0], HMACkey[1], HMACkey[2],HMACkey[3], HMACkey[4], HMACkey[5],HMACkey[6], HMACkey[7], HMACkey[8])
+    
     # generate cipher
     cipher = AES.new(AESkey, AES.MODE_CBC)
     message = message.strip("\n").encode()
     MACkey = HMAC.new(HMACkey1, digestmod=SHA256)
     
+    # HMAC the metadata
     MACkey.update(struct.pack(f'<HHH16s32s{len(message)}s', version, length, len(message), cipher.iv, salt, message))
     bigMAC = MACkey.digest()
     metadata = struct.pack(f'<HHH16s32s{len(message)}s32s', version, length, len(message), cipher.iv, salt, message, bigMAC)
