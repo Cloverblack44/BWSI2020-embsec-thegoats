@@ -12,10 +12,8 @@ Provisions two keys to secret_build_output.txt file:
 2) key for HMACing metadata
 
 -----fw_protect.py-----
-generate_keys_hkdf(mySalt) function:
- - PURPOSE: creating two random keys for AES and HMAC
- - reads in password from secret_build_output.txt file
- - takes in a salt through its parameters 
+generate_keys_hkdf(password, mySalt) function:
+ - PURPOSE: creating two random keys for AES and HMAC 
  - creates two 16 byte keys from the password and salt using SHA512
  - first key is an AES encryption key
  - second key is a HMAC key for HMACing the firmware
@@ -76,5 +74,13 @@ static void test_HKDF_inner(const br_hash_class *dig, const char *ikmhex, const 
 void load_firmware(void) function:
  - PURPOSE: takes a metadata package from UART1 and checks the authenticity of it with HMAC. It then takes frames of     
    firmware where it checks its authencitiy and decrypt
- - 
+ - stores keys provisioned from server
+ - get version size, firmware size, and message size
+ - receive cipherIV, salt, message, and HMAC
+ - create the HMAC bootloader side and if the HMAC doesn't match, return an error and reset
+ - generate the keys bootloader side
+ - write new firmware size and version to Flash
+ - get next two bytes for frame length
+ - use while(1) loop to check HMAC and decrypt firmware, then flash it 
+ - write the OK message
  - RETURNS nothing

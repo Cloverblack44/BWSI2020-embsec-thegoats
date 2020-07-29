@@ -31,7 +31,7 @@ def send_metadata(ser, metadata, message_length, debug=False):
     """
     Takes the file metadata and sends it as a frame to the bootloader.
     """
-    version, size, length, iv , salt, message, MAC = struct.unpack_from(f'<HH16s32s32sH{message_length}s', metadata)
+    version, size, length, iv , salt, message, MAC = struct.unpack_from(f'<HHH16s32s{message_length}s32s', metadata)
     print(f'Version: {version}\nSize: {size} bytes\n')
  
     # Handshake for update
@@ -65,15 +65,12 @@ def send_frame(ser, frame, debug=False):
         print(frame)
  
     resp = ser.read()  # Wait for an OK from the bootloader
-    time.sleep(0.1)
  
     if resp == b'\x03':
         while resp != RESP_OK:
             print("in while loop")
             ser.write(frame)
             resp = ser.read()
-            time.sleep(0.1)
-    time.sleep(0.1)
     if resp != RESP_OK:
         raise RuntimeError("ERROR: Bootloader responded with {}".format(repr(resp)))
  
@@ -91,7 +88,7 @@ def main(ser, infile, debug):
         print(message_length)
         metadata = fp.read(86+message_length)
         fp.read(1)
-        send_metadata(ser, metadata, message_length, debug=True)
+        send_metadata(ser, metadata, message_length, debug=debug)
         while True:
             # write 16 byte frames to the stellaris
             idv += 1
