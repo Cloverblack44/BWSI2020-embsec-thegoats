@@ -12,7 +12,7 @@
 // Application Imports
 #include "uart.h"
 #include "bearssl.h"
- 
+#include <math.h>
 // Forward Declarations
 void load_initial_firmware(void);
 void load_firmware(void);
@@ -103,7 +103,7 @@ int main(void) {
  * Load initial firmware into flash
  */
 void load_initial_firmware(void) {
- 
+
   if (*((uint32_t*)(METADATA_BASE+512)) != 0){
     /*
      * Default Flash startup state in QEMU is all zeros since it is
@@ -114,20 +114,20 @@ void load_initial_firmware(void) {
      */
     return;
   }
- 
+
   int size = (int)&_binary_firmware_bin_size;
-  int *initialData = (int *)&_binary_firmware_bin_start;
- 
+  int *data = (int *)&_binary_firmware_bin_start;
+    
   uint16_t version = 2;
   uint32_t metadata = (((uint16_t) size & 0xFFFF) << 16) | (version & 0xFFFF);
   program_flash(METADATA_BASE, (uint8_t*)(&metadata), 4);
   fw_release_message_address = (uint8_t *) "This is the initial release message.";
- 
+    
   int i = 0;
   for (; i < size / FLASH_PAGESIZE; i++){
-       program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) initialData) + (i * FLASH_PAGESIZE), FLASH_PAGESIZE);
+       program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) data) + (i * FLASH_PAGESIZE), FLASH_PAGESIZE);
   }
-  program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) initialData) + (i * FLASH_PAGESIZE), size % FLASH_PAGESIZE);
+  program_flash(FW_BASE + (i * FLASH_PAGESIZE), ((unsigned char *) data) + (i * FLASH_PAGESIZE), size % FLASH_PAGESIZE);
 }
 
 /*
@@ -222,12 +222,13 @@ void load_firmware(void)
   uart_write_str(UART2, "Received salt");
   nl(UART2); 
     
-  char release_message[1024];
+  char release_message[1025];
   // get message
   for (int i = 0; i < release_message_length; i++) {
       release_message[i] = uart_read(UART1, BLOCKING, &read);
       comboMetadata[54+i] = release_message[i];
   }
+//   release_message[release_message_length] = "\0";
   uart_write_str(UART2, "Received message");
   nl(UART2); 
     
@@ -284,7 +285,7 @@ void load_firmware(void)
     
   // Compare to old version and abort if older (note special case for version 0).
   uint16_t old_version = *fw_version_address;
- 
+  uart_write_hex(UART2, old_version);
   if (version != 0 && version < old_version) {
     uart_write(UART1, ERROR); // Reject the metadata.
     SysCtlReset(); // Reset device
@@ -299,10 +300,11 @@ void load_firmware(void)
   uint32_t metadata = ((size & 0xFFFF) << 16) | (version & 0xFFFF);
   program_flash(METADATA_BASE, (uint8_t*)(&metadata), 4);
 
-  fw_release_message_address = (uint8_t *) (FW_BASE + size);
-  program_flash(FW_BASE + size, release_message, release_message_length);
+  fw_release_message_address = (uint8_t *) (FW_BASE - 1024);
+  program_flash(FW_BASE - 1024, release_message, sizeof(release_message));
   uart_write(UART1, OK); // Acknowledge the metadata.
- 
+  uart_write_hex(UART2, *fw_version_address);
+    
   /* Loop here until you can get all your characters and stuff */
   while (1) {
  
@@ -360,7 +362,7 @@ void load_firmware(void)
         // If we filed our page buffer, program it
         if (data_index == FLASH_PAGESIZE || frame_length == 0) {
           // Try to write flash and check for error
-          if (program_flash(page_addr, data, data_index-16+frame_length)){
+          if (program_flash(page_addr, data, data_index)){
             uart_write(UART1, ERROR); // Reject the firmware
             SysCtlReset(); // Reset device
             return;
@@ -373,11 +375,6 @@ void load_firmware(void)
           uart_write_hex(UART2, data_index-16+frame_length);
           nl(UART2);
     #endif
-          for (int i = 0; i < data_index-16+frame_length; i++){
-              uart_write_hex(UART2, i+1);
-              uart_write_hex(UART2, data[i]);
-              uart_write_str(UART2, "\r\n");
-          }
           // Update to next page
           page_addr += FLASH_PAGESIZE;
           data_index = 0;

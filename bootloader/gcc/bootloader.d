@@ -31,4 +31,4 @@ gcc/bootloader.o: src/bootloader.c \
  /home/jovyan/lib/BearSSL/inc/bearssl_ec.h \
  /home/jovyan/lib/BearSSL/inc/bearssl_ssl.h \
  /home/jovyan/lib/BearSSL/inc/bearssl_x509.h \
- /home/jovyan/lib/BearSSL/inc/bearssl_pem.h
+ /home/jovyan/lib/BearSSL/inc/bearssl_pem.h /usr/include/newlib/math.h
