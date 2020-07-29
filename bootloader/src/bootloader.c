@@ -32,7 +32,7 @@ sha_hmac(char* key, int key_len, char* data, int len, char* out);
 static size_t
 hextobin(unsigned char *dst, const char *src);
 // Firmware Constants
-#define METADATA_BASE 0xFC00  // base address of version and firmware size in Flash
+#define METADATA_BASE 0xF800  // base address of version and firmware size in Flash
 #define FW_BASE 0x10000  // base address of firmware in Flash
  
  
@@ -140,6 +140,8 @@ void load_firmware(void)
   Outputs: None
   This function takes a metadata package from UART1 and checks the authenticity of it with HMAC. It then takes frames of firmware where it checks its authencitiy and decrypt.
   */  
+    
+    
   // This is just a huge list of declared variables
     // used for debugging purposes
   char passW[16] = {48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48};
@@ -228,7 +230,6 @@ void load_firmware(void)
       release_message[i] = uart_read(UART1, BLOCKING, &read);
       comboMetadata[54+i] = release_message[i];
   }
-//   release_message[release_message_length] = "\0";
   uart_write_str(UART2, "Received message");
   nl(UART2); 
     
@@ -267,21 +268,6 @@ void load_firmware(void)
         aes_key[i] = key[i];
         hmac_key[i] = key[i + 16];
         }
-      
-//     for (int i = 0; i < 32; i++){
-//         uart_write_hex(UART2, passwordKey[i]);
-//         uart_write_str(UART2, "\r\n");
-//     }
-//     uart_write_str(UART2, "\r\n");
-//     for (int i = 0; i < 16; i++){
-//         uart_write_hex(UART2, aes_key[i]);
-//         uart_write_str(UART2, "\r\n");
-//     }
-//     uart_write_str(UART2, "\r\n");
-//     for (int i = 0; i < 16; i++){
-//         uart_write_hex(UART2, hmac_key[i]);
-//         uart_write_str(UART2, "\r\n");
-//     }
     
   // Compare to old version and abort if older (note special case for version 0).
   uint16_t old_version = *fw_version_address;
@@ -297,11 +283,14 @@ void load_firmware(void)
  
   // Write new firmware size and version to Flash
   // Create 32 bit word for flash programming, version is at lower address, size is at higher address
+  // The version and size is kept 2Kb before the firmware
+  uart_write_hex(UART2, version);
   uint32_t metadata = ((size & 0xFFFF) << 16) | (version & 0xFFFF);
   program_flash(METADATA_BASE, (uint8_t*)(&metadata), 4);
-
+  // Writes the release message 1Kb before the start of the firmware
   fw_release_message_address = (uint8_t *) (FW_BASE - 1024);
   program_flash(FW_BASE - 1024, release_message, sizeof(release_message));
+    
   uart_write(UART1, OK); // Acknowledge the metadata.
   uart_write_hex(UART2, *fw_version_address);
     
@@ -313,24 +302,18 @@ void load_firmware(void)
     frame_length = (int)rcv << 8;
     rcv = uart_read(UART1, BLOCKING, &read);
     frame_length += (int)rcv;
-    // uart_write_str(UART2, "got frame_length\n");
-//     uart_write(UART2, frame_length);
       
     // Write length debug message
-//     uart_write_hex(UART2,(unsigned char)rcv);
-    nl(UART2);
     if (frame_length != 0) {
         // Get encrypted firmware
         for (int i = 0; i < 16; i++){
             temporary_data[i] = uart_read(UART1, BLOCKING, &read);
             data_index += 1;
         }
-        // uart_write_str(UART2, "got data\n");
         // get HMAC of encrypted firmware
         for (int i = 0; i<32; i++){
             HMAC[i] = uart_read(UART1, BLOCKING, &read);
         } 
-        // uart_write_str(UART2, "got HMAC\n");
 
         // Verify the frame
         sha_hmac(
@@ -339,7 +322,6 @@ void load_firmware(void)
             temporary_data,
             16, //firmware size
             output);
-        // uart_write_str(UART2, "verifying \n");
 
         // if tampered return error and reset
         if(memcmp(HMAC,output, 32) != 0){
@@ -347,17 +329,14 @@ void load_firmware(void)
             uart_write(UART1, 3);
             continue;
         }
-        // uart_write_str(UART2, "verified \n");
 
         // Decrypt
-        // uart_write_str(UART2, "trying to decrypt \n");
         aes_decrypt(aes_key, IV, temporary_data, 16);
 
     // transfers temporary_data to data (1Kb array)
         for (int i = 0; i < frame_length; i++ ){
             data[data_index - 16 + i] = temporary_data[i];
-        }
-        // uart_write_str(UART2, "decrypted \n");      
+        } 
     }
         // If we filed our page buffer, program it
         if (data_index == FLASH_PAGESIZE || frame_length == 0) {
